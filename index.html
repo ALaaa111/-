@@ -445,14 +445,21 @@ function initLevel(idx) {
     gapB = data.gapB;
     polyVerts = data.polygon;
 
-    // Generate blue blocks OUTSIDE the shape (in lower play area below wall)
+    // Generate blue blocks on both sides of the channel (above WALL_GAP_Y, outside shape)
     blueBlocks = [];
     const midX = (gapA.x + gapB.x) / 2;
-    const halfCh = lvl.channel / 2;
-    for (let bx = 30; bx <= W - 30; bx += BLUE_SPACING) {
-        for (let by = WALL_GAP_Y + 28; by <= PADDLE_Y - 28; by += BLUE_SPACING) {
-            // Skip the channel passage so ball can travel up freely
-            if (bx > midX - halfCh - 14 && bx < midX + halfCh + 14) continue;
+    const chTopY = data.channelTopY;
+    const chBotA = data.chBotA, chBotB = data.chBotB;
+    for (let bx = 25; bx <= W - 25; bx += BLUE_SPACING) {
+        for (let by = chTopY + 15; by < WALL_GAP_Y - 8; by += BLUE_SPACING) {
+            // Interpolate channel wall X positions at this Y
+            const t = (by - chTopY) / (WALL_GAP_Y - chTopY);
+            const leftWallX = gapA.x + (chBotA.x - gapA.x) * t;
+            const rightWallX = gapB.x + (chBotB.x - gapB.x) * t;
+            // Skip if inside channel passage
+            if (bx > leftWallX - 12 && bx < rightWallX + 12) continue;
+            // Skip if inside the shape
+            if (pointInPolygon(bx, by, polyVerts)) continue;
             blueBlocks.push({ x: bx, y: by, r: BLUE_R, alive: true, pulse: Math.random() * Math.PI * 2 });
         }
     }
