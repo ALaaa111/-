@@ -173,12 +173,12 @@
             <div class="label">关卡</div>
             <div class="value" id="levelName">圆形</div>
         </div>
-        <div class="info-pill">
+        <div class="info-pill" style="display:none">
             <div class="label">生命</div>
-            <div class="value" id="livesValue">3</div>
+            <div class="value" id="livesValue">∞</div>
         </div>
         <div class="info-pill">
-            <div class="label">得分</div>
+            <div class="label">本关掉落</div>
             <div class="value" id="scoreValue">0</div>
         </div>
         <div class="info-pill">
@@ -202,21 +202,22 @@
         移动绿色挡板接住红球<br>
         球弹入通道击碎金色方块<br>
         再次进入通道穿过缺口<br>
-        在形状内部击打蓝色方块得分！<br>
-        连续3次击中蓝色触发加速！</p>
+        吃完所有蓝色方块即可过关！<br>
+        连续3次击中蓝色触发加速！<br><br>
+        掉落次数越少，技术越好！</p>
         <button class="btn btn-primary" id="startBtn">开始游戏</button>
     </div>
 
     <div id="levelCompleteOverlay" class="overlay hidden">
         <h2>关卡完成！</h2>
-        <p class="score-text">本关得分: <span id="lcLevelScore">0</span></p>
-        <p class="total-score">总分: <span id="lcTotalScore">0</span></p>
+        <p class="score-text">本关掉落次数: <span id="lcLevelScore">0</span></p>
+        <p class="total-score">总掉落次数: <span id="lcTotalScore">0</span></p>
         <button class="btn btn-primary" id="nextLevelBtn">下一关</button>
     </div>
 
     <div id="gameOverOverlay" class="overlay hidden">
         <h1 style="color:#FF4444;text-shadow:0 0 20px rgba(255,68,68,0.6);">游戏结束</h1>
-        <p class="score-text">得分: <span id="goScore">0</span></p>
+        <p class="score-text">掉落次数: <span id="goScore">0</span></p>
         <button class="btn btn-primary" id="retryBtn">重试本关</button>
     </div>
 
@@ -231,9 +232,9 @@
 <script>
 // ===================== CONFIG =====================
 const W = 500, H = 750;
-const BALL_R = 8;
+const BALL_R = 6;
 const GRAVITY = 0.15;
-const BOUNCE_SPEED = 13.5;
+const BOUNCE_SPEED = 16.2;
 const MAX_SPEED = 18;
 const PADDLE_W = 80;
 const PADDLE_H = 10;
@@ -245,25 +246,27 @@ const SHAPE_CX = 250, SHAPE_CY = 200, SHAPE_R = 95;
 const BLUE_R = 7, BLUE_SPACING = 30;
 
 const LEVELS = [
-    { name: '圆形',   shape: 'circle',   channel: 80 },
-    { name: '方形',   shape: 'square',   channel: 66 },
-    { name: '三角形', shape: 'triangle', channel: 54 },
-    { name: '五边形', shape: 'pentagon', channel: 44 },
-    { name: '六边形', shape: 'hexagon',  channel: 38 },
-    { name: '五角星', shape: 'star',     channel: 32 },
-    { name: '心形',   shape: 'heart',    channel: 28 },
-    { name: '菱形',   shape: 'diamond',  channel: 24 },
-    { name: '八角形', shape: 'octagon',  channel: 22 },
-    { name: '十字形', shape: 'cross',    channel: 20 },
+    { name: '圆形',   shape: 'circle',   channel: 80, gold: 28 },
+    { name: '方形',   shape: 'square',   channel: 66, gold: 28 },
+    { name: '三角形', shape: 'triangle', channel: 54, gold: 28 },
+    { name: '五边形', shape: 'pentagon', channel: 44, gold: 28 },
+    { name: '六边形', shape: 'hexagon',  channel: 38, gold: 28 },
+    { name: '五角星', shape: 'star',     channel: 32, gold: 14 },
+    { name: '心形',   shape: 'heart',    channel: 28, gold: 14 },
+    { name: '菱形',   shape: 'diamond',  channel: 24, gold: 14 },
+    { name: '八角形', shape: 'octagon',  channel: 22, gold: 14 },
+    { name: '十字形', shape: 'cross',    channel: 20, gold: 14 },
 ];
 
-// ===================== STATE =====================
+// totalScore = cumulative drop count across all levels
+// levelScore = drop count for current level
+// lives = drop counter (kept for legacy references)
 let canvas, ctx;
 let mode = 'menu';
 let levelIdx = 0;
 let totalScore = 0;
 let levelScore = 0;
-let lives = 3;
+let lives = 0;
 let ball = { x: 250, y: 680, vx: 0, vy: 0, r: BALL_R };
 let paddle = { x: 250, y: PADDLE_Y, w: PADDLE_W, h: PADDLE_H };
 let walls = [];
@@ -319,6 +322,15 @@ function generateHeart(cx, cy, radius) {
     return verts;
 }
 
+function generateDiamond(cx, cy, radius) {
+    return [
+        { x: cx, y: cy - radius },       // top
+        { x: cx + radius, y: cy },        // right
+        { x: cx, y: cy + radius },        // bottom
+        { x: cx - radius, y: cy },        // left
+    ];
+}
+
 function generateCross(cx, cy, radius) {
     const r = radius;
     const t = radius * 0.32;
@@ -342,102 +354,197 @@ function getShapeVertices(shape, cx, cy, radius) {
         case 'octagon':  return generatePolygon(cx, cy, radius, 8);
         case 'star':     return generateStar(cx, cy, radius, 5);
         case 'heart':    return generateHeart(cx, cy, radius);
-        case 'diamond':  return generatePolygon(cx, cy, radius, 4);
+        case 'diamond':  return generateDiamond(cx, cy, radius);
         case 'cross':    return generateCross(cx, cy, radius);
         default:         return generatePolygon(cx, cy, radius, 6);
     }
 }
 
-function generateLevel(shape, cx, cy, radius, channelWidth) {
+// Helper: find all X intersections of polygon with horizontal line at y
+function getPolyXAtY(verts, y) {
+    const xs = [];
+    const n = verts.length;
+    for (let i = 0; i < n; i++) {
+        const v1 = verts[i];
+        const v2 = verts[(i + 1) % n];
+        if ((v1.y < y && v2.y >= y) || (v1.y >= y && v2.y < y)) {
+            const t = (y - v1.y) / (v2.y - v1.y);
+            xs.push({ x: v1.x + (v2.x - v1.x) * t, edgeIdx: i });
+        }
+    }
+    xs.sort((a, b) => a.x - b.x);
+    return xs;
+}
+
+function generateLevel(shape, cx, cy, radius, channelWidth, goldWidth) {
     const verts = getShapeVertices(shape, cx, cy, radius);
     const n = verts.length;
 
-    // Find bottommost edge by midpoint Y
-    let beIdx = 0;
-    let bestMidY = -Infinity;
-    for (let i = 0; i < n; i++) {
-        const midY = (verts[i].y + verts[(i+1)%n].y) / 2;
-        if (midY > bestMidY) { bestMidY = midY; beIdx = i; }
+    // Find min/max Y of the shape
+    let minY = Infinity, maxY = -Infinity;
+    for (const v of verts) {
+        if (v.y < minY) minY = v.y;
+        if (v.y > maxY) maxY = v.y;
     }
 
-    const e1 = verts[beIdx];
-    const e2 = verts[(beIdx+1)%n];
-    const midX = (e1.x + e2.x) / 2;
-    const halfCh = channelWidth / 2;
+    // Channel width = entrance gap width (same value for both)
+    // The channel below the shape connects directly to the entrance at the shape's bottom
+    const gapLeftX = cx - channelWidth / 2;
+    const gapRightX = cx + channelWidth / 2;
 
-    // Gap = channel width, centered on shape's bottom edge midpoint
-    const gapLeftX = midX - halfCh;
-    const gapRightX = midX + halfCh;
-
-    // Find gap points on shape boundary by X-coordinate
-    function findPointByX(startIdx, startPt, targetX, walkDir) {
-        const edgeMinX = Math.min(e1.x, e2.x), edgeMaxX = Math.max(e1.x, e2.x);
-        if (targetX >= edgeMinX - 0.001 && targetX <= edgeMaxX + 0.001) {
-            const dx = e2.x - e1.x;
-            const t = Math.abs(dx) > 0.001 ? (targetX - e1.x) / dx : 0.5;
-            return { pt: { x: targetX, y: e1.y + (e2.y - e1.y) * t }, idx: walkDir > 0 ? (beIdx + 1) % n : beIdx };
-        }
-        let best = { pt: startPt, idx: startIdx, err: Math.abs(startPt.x - targetX) };
-        let curr = startIdx;
-        let p = startPt;
-        for (let step = 0; step < n; step++) {
-            const nextIdx = walkDir > 0 ? (curr + 1) % n : (curr - 1 + n) % n;
-            const np = verts[nextIdx];
-            const segMinX = Math.min(p.x, np.x), segMaxX = Math.max(p.x, np.x);
-            if (targetX >= segMinX - 0.001 && targetX <= segMaxX + 0.001) {
-                const dx = np.x - p.x;
-                const t = Math.abs(dx) > 0.001 ? (targetX - p.x) / dx : 0.5;
-                return { pt: { x: targetX, y: p.y + (np.y - p.y) * t }, idx: nextIdx };
+    // Find goldY: scan down from top until shape is wide enough for gold gap
+    // Only consider spans that contain the center x (cx)
+    let goldY = minY;
+    for (let y = minY; y <= maxY; y++) {
+        const xs = getPolyXAtY(verts, y);
+        if (xs.length >= 2) {
+            for (let i = 0; i < xs.length - 1; i += 2) {
+                if (xs[i].x <= cx && xs[i+1].x >= cx) {
+                    const width = xs[i+1].x - xs[i].x;
+                    if (width >= goldWidth + 6) {
+                        goldY = y;
+                    }
+                    break;
+                }
             }
-            const err = Math.abs(np.x - targetX);
-            if (err < best.err) best = { pt: { x: np.x, y: np.y }, idx: nextIdx, err };
-            p = np;
-            curr = nextIdx;
+            if (goldY !== minY) break;
         }
-        return { pt: best.pt, idx: best.idx };
     }
 
-    const resA = findPointByX(beIdx, e1, gapLeftX, -1);
-    const gA = resA.pt;
-    const gAIdx = resA.idx;
+    // Find channelY: scan up from bottom until shape is wide enough for channel gap
+    // Only consider spans that contain the center x (cx)
+    let channelY = maxY;
+    for (let y = maxY; y >= minY; y--) {
+        const xs = getPolyXAtY(verts, y);
+        if (xs.length >= 2) {
+            for (let i = 0; i < xs.length - 1; i += 2) {
+                if (xs[i].x <= cx && xs[i+1].x >= cx) {
+                    const width = xs[i+1].x - xs[i].x;
+                    if (width >= channelWidth + 6) {
+                        channelY = y;
+                    }
+                    break;
+                }
+            }
+            if (channelY !== maxY) break;
+        }
+    }
 
-    const resB = findPointByX((beIdx + 1) % n, e2, gapRightX, 1);
-    const gB = resB.pt;
-    const gBIdx = resB.idx;
+    // Gold gap coordinates
+    const goldLeftX = cx - goldWidth / 2;
+    const goldRightX = cx + goldWidth / 2;
 
-    // Build shape walls: from gB clockwise around to gA (skipping the gap)
     const wallSegs = [];
-    wallSegs.push({ x1: gB.x, y1: gB.y, x2: verts[gBIdx].x, y2: verts[gBIdx].y });
-    let curr = gBIdx;
-    let safety = 0;
-    while (curr !== gAIdx && safety < n * 2) {
-        const next = (curr + 1) % n;
-        wallSegs.push({ x1: verts[curr].x, y1: verts[curr].y, x2: verts[next].x, y2: verts[next].y });
-        curr = next;
-        safety++;
-    }
-    wallSegs.push({ x1: verts[gAIdx].x, y1: verts[gAIdx].y, x2: gA.x, y2: gA.y });
 
-    // Rectangular channel: vertical walls from gap points straight down to WALL_GAP_Y
-    const channelTopY = Math.max(gA.y, gB.y);
-    wallSegs.push({ x1: gapLeftX, y1: channelTopY, x2: gapLeftX, y2: WALL_GAP_Y });
-    wallSegs.push({ x1: gapRightX, y1: channelTopY, x2: gapRightX, y2: WALL_GAP_Y });
+    // Shape walls: clip polygon edges to [goldY, channelY] region
+    // This creates the shape's border between the gold gap (top) and entrance gap (bottom)
+    // The ball must bounce off these walls to navigate from entrance to gold
+    for (let i = 0; i < n; i++) {
+        const v1 = verts[i];
+        const v2 = verts[(i + 1) % n];
+
+        // Skip edges entirely above goldY or below channelY
+        if (v1.y <= goldY && v2.y <= goldY) continue;
+        if (v1.y >= channelY && v2.y >= channelY) continue;
+
+        let p1 = { x: v1.x, y: v1.y };
+        let p2 = { x: v2.x, y: v2.y };
+
+        // Clip at goldY (top boundary)
+        if (p1.y < goldY) {
+            const t = (goldY - v1.y) / (v2.y - v1.y);
+            p1 = { x: v1.x + (v2.x - v1.x) * t, y: goldY };
+        }
+        if (p2.y < goldY) {
+            const t = (goldY - v1.y) / (v2.y - v1.y);
+            p2 = { x: v1.x + (v2.x - v1.x) * t, y: goldY };
+        }
+        // Clip at channelY (bottom boundary)
+        if (p1.y > channelY) {
+            const t = (channelY - v1.y) / (v2.y - v1.y);
+            p1 = { x: v1.x + (v2.x - v1.x) * t, y: channelY };
+        }
+        if (p2.y > channelY) {
+            const t = (channelY - v1.y) / (v2.y - v1.y);
+            p2 = { x: v1.x + (v2.x - v1.x) * t, y: channelY };
+        }
+
+        // Skip horizontal segments at goldY/channelY (handled by horizontal walls below)
+        if (Math.abs(p1.y - goldY) < 0.01 && Math.abs(p2.y - goldY) < 0.01) continue;
+        if (Math.abs(p1.y - channelY) < 0.01 && Math.abs(p2.y - channelY) < 0.01) continue;
+
+        if (Math.abs(p2.x - p1.x) > 0.5 || Math.abs(p2.y - p1.y) > 0.5) {
+            wallSegs.push({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+        }
+    }
+
+    // Horizontal wall at goldY: from shape edge to gold gap (seals the top)
+    const goldXs = getPolyXAtY(verts, goldY);
+    for (let i = 0; i < goldXs.length - 1; i += 2) {
+        const leftX = goldXs[i].x;
+        const rightX = goldXs[i + 1].x;
+        if (leftX <= cx && rightX >= cx) {
+            if (leftX < goldLeftX) wallSegs.push({ x1: leftX, y1: goldY, x2: goldLeftX, y2: goldY });
+            if (rightX > goldRightX) wallSegs.push({ x1: goldRightX, y1: goldY, x2: rightX, y2: goldY });
+        } else {
+            wallSegs.push({ x1: leftX, y1: goldY, x2: rightX, y2: goldY });
+        }
+    }
+
+    // Horizontal wall at channelY: from shape edge to entrance gap (seals the bottom)
+    // Entrance gap = channel width (same width, no bridge walls needed)
+    const chXs = getPolyXAtY(verts, channelY);
+    for (let i = 0; i < chXs.length - 1; i += 2) {
+        const leftX = chXs[i].x;
+        const rightX = chXs[i + 1].x;
+        if (leftX <= cx && rightX >= cx) {
+            if (leftX < gapLeftX) wallSegs.push({ x1: leftX, y1: channelY, x2: gapLeftX, y2: channelY });
+            if (rightX > gapRightX) wallSegs.push({ x1: gapRightX, y1: channelY, x2: rightX, y2: channelY });
+        } else {
+            wallSegs.push({ x1: leftX, y1: channelY, x2: rightX, y2: channelY });
+        }
+    }
+
+    // Vertical channel walls: from shape bottom down to bottom wall
+    // Same width as entrance gap - channel connects directly to shape
+    wallSegs.push({ x1: gapLeftX, y1: channelY, x2: gapLeftX, y2: WALL_GAP_Y });
+    wallSegs.push({ x1: gapRightX, y1: channelY, x2: gapRightX, y2: WALL_GAP_Y });
 
     // Bottom wall with gap matching channel width
     wallSegs.push({ x1: 0, y1: WALL_GAP_Y, x2: gapLeftX, y2: WALL_GAP_Y });
     wallSegs.push({ x1: gapRightX, y1: WALL_GAP_Y, x2: W, y2: WALL_GAP_Y });
 
-    // Use gap points aligned to channel width for gold block
-    const goldA = { x: gapLeftX, y: channelTopY };
-    const goldB = { x: gapRightX, y: channelTopY };
+    // Deflector wall: prevents straight vertical path from entrance to gold
+    // Forces the ball to bounce off the shape's border, making it effective
+    const midY = (goldY + channelY) / 2;
+    const deflectorHalf = Math.min(14, channelWidth * 0.35);
+    const deflectorOffset = deflectorHalf * 0.5;
+    wallSegs.push({
+        x1: cx - deflectorHalf, y1: midY + deflectorOffset,
+        x2: cx + deflectorHalf, y2: midY - deflectorOffset
+    });
 
-    return { walls: wallSegs, gapA: goldA, gapB: goldB, polygon: verts, channelTopY, chBotA: { x: gapLeftX, y: WALL_GAP_Y }, chBotB: { x: gapRightX, y: WALL_GAP_Y } };
+    // Gold block at top of shape (horizontal segment)
+    const goldA = { x: goldLeftX, y: goldY };
+    const goldB = { x: goldRightX, y: goldY };
+
+    return {
+        walls: wallSegs,
+        gapA: goldA, gapB: goldB,
+        polygon: verts,
+        channelTopY: channelY,
+        goldY: goldY,
+        chBotA: { x: gapLeftX, y: WALL_GAP_Y },
+        chBotB: { x: gapRightX, y: WALL_GAP_Y },
+        goldLeftX, goldRightX, gapLeftX, gapRightX,
+        minY, maxY
+    };
 }
 
 // ===================== LEVEL INIT =====================
 function initLevel(idx) {
     const lvl = LEVELS[idx];
-    const data = generateLevel(lvl.shape, SHAPE_CX, SHAPE_CY, SHAPE_R, lvl.channel);
+    const data = generateLevel(lvl.shape, SHAPE_CX, SHAPE_CY, SHAPE_R, lvl.channel, lvl.gold);
 
     walls = data.walls.map(w => ({...w}));
     goldWallSeg = { x1: data.gapA.x, y1: data.gapA.y, x2: data.gapB.x, y2: data.gapB.y };
@@ -449,18 +556,14 @@ function initLevel(idx) {
     // Generate blue blocks OUTSIDE shape, OUTSIDE channel, ABOVE bottom wall
     blueBlocks = [];
     const chTopY = data.channelTopY;
-    const chBotA = data.chBotA, chBotB = data.chBotB;
+    const chLeftX = data.chBotA.x;
+    const chRightX = data.chBotB.x;
     for (let bx = 20; bx <= W - 20; bx += BLUE_SPACING) {
         for (let by = CEILING_Y + 20; by < WALL_GAP_Y - 10; by += BLUE_SPACING) {
             // Skip if inside the shape
             if (pointInPolygon(bx, by, polyVerts)) continue;
-            // Skip if inside or near the channel passage
-            const t = (by - chTopY) / (WALL_GAP_Y - chTopY);
-            if (t >= 0 && t <= 1) {
-                const leftWallX = gapA.x + (chBotA.x - gapA.x) * t;
-                const rightWallX = gapB.x + (chBotB.x - gapB.x) * t;
-                if (bx > leftWallX - 14 && bx < rightWallX + 14) continue;
-            }
+            // Skip if inside or near the rectangular channel passage
+            if (by > chTopY - BLUE_R && bx > chLeftX - BLUE_R && bx < chRightX + BLUE_R) continue;
             blueBlocks.push({ x: bx, y: by, r: BLUE_R, alive: true, pulse: Math.random() * Math.PI * 2 });
         }
     }
@@ -477,7 +580,7 @@ function initLevel(idx) {
     shakeAmount = 0;
     launchFlash = 0;
     levelScore = 0;
-    lives = 3;
+    lives = 0;
     mode = 'ready';
 
     updateUI();
@@ -604,9 +707,6 @@ function updatePhysics() {
             if (ballCircleCollision(ball, blk)) {
                 blk.alive = false;
                 blueBlocks.splice(i, 1);
-                const pts = 10 * (levelIdx + 1);
-                levelScore += pts;
-                totalScore += pts;
                 consecutiveBlue++;
                 spawnParticles(blk.x, blk.y, '#00BFFF', 12);
                 playSound('blueHit');
@@ -651,21 +751,17 @@ function updatePhysics() {
 
         // Check fail
         if (ball.y > FAIL_Y) {
-            lives--;
-            if (lives <= 0) {
-                mode = 'gameOver';
-                showGameOver();
-                playSound('gameOver');
-                return;
-            } else {
-                ball.x = paddle.x;
-                ball.y = paddle.y - BALL_R - 2;
-                ball.vx = 0;
-                ball.vy = 0;
-                consecutiveBlue = 0;
-                mode = 'ready';
-                playSound('lifeLost');
-            }
+            lives++;
+            levelScore++;
+            totalScore++;
+            ball.x = paddle.x;
+            ball.y = paddle.y - BALL_R - 2;
+            ball.vx = 0;
+            ball.vy = 0;
+            consecutiveBlue = 0;
+            speedBoosts = 0;
+            mode = 'ready';
+            playSound('lifeLost');
             return;
         }
     }
@@ -1031,8 +1127,8 @@ function playSound(type) {
 // ===================== UI =====================
 function updateUI() {
     document.getElementById('levelName').textContent = `${levelIdx + 1}. ${LEVELS[levelIdx].name}`;
-    document.getElementById('scoreValue').textContent = totalScore;
-    document.getElementById('livesValue').textContent = '♥'.repeat(lives) || '0';
+    document.getElementById('scoreValue').textContent = levelScore;
+    document.getElementById('livesValue').textContent = '∞';
     const speedMul = (1 + speedBoosts * 0.15).toFixed(1);
     document.getElementById('speedValue').textContent = `x${speedMul}`;
 
@@ -1051,10 +1147,10 @@ function updateUI() {
         inst.textContent = '移动挡板，点击/空格发射小球';
         inst.style.display = '';
     } else if (mode === 'playing' && goldActive) {
-        inst.textContent = '击打蓝色方块得分！球弹入通道击碎金色方块';
+        inst.textContent = '球进通道穿入形状内部碰金色，吃完蓝色过关';
         inst.style.display = '';
     } else if (mode === 'playing' && !goldActive) {
-        inst.textContent = '金色已破！继续击打蓝色方块得分';
+        inst.textContent = '金色已破！继续吃完蓝色方块过关';
         inst.style.display = '';
     } else {
         inst.style.display = 'none';
@@ -1073,7 +1169,7 @@ function showGameOver() {
 }
 
 function showGameComplete() {
-    document.getElementById('gcTotalScore').textContent = `总分: ${totalScore}`;
+    document.getElementById('gcTotalScore').textContent = `总掉落次数: ${totalScore}`;
     document.getElementById('gameCompleteOverlay').classList.remove('hidden');
 }
 
