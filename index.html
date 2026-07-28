@@ -245,16 +245,16 @@ const SHAPE_CX = 250, SHAPE_CY = 200, SHAPE_R = 95;
 const BLUE_R = 7, BLUE_SPACING = 30;
 
 const LEVELS = [
-    { name: '圆形',   shape: 'circle',   gap: 90 },
-    { name: '方形',   shape: 'square',   gap: 76 },
-    { name: '三角形', shape: 'triangle', gap: 66 },
-    { name: '五边形', shape: 'pentagon', gap: 56 },
-    { name: '六边形', shape: 'hexagon',  gap: 48 },
-    { name: '五角星', shape: 'star',     gap: 42 },
-    { name: '心形',   shape: 'heart',    gap: 38 },
-    { name: '菱形',   shape: 'diamond',  gap: 34 },
-    { name: '八角形', shape: 'octagon',  gap: 30 },
-    { name: '十字形', shape: 'cross',    gap: 26 },
+    { name: '圆形',   shape: 'circle',   gap: 90, channel: 80 },
+    { name: '方形',   shape: 'square',   gap: 76, channel: 66 },
+    { name: '三角形', shape: 'triangle', gap: 66, channel: 54 },
+    { name: '五边形', shape: 'pentagon', gap: 56, channel: 44 },
+    { name: '六边形', shape: 'hexagon',  gap: 48, channel: 38 },
+    { name: '五角星', shape: 'star',     gap: 42, channel: 32 },
+    { name: '心形',   shape: 'heart',    gap: 38, channel: 28 },
+    { name: '菱形',   shape: 'diamond',  gap: 34, channel: 24 },
+    { name: '八角形', shape: 'octagon',  gap: 30, channel: 22 },
+    { name: '十字形', shape: 'cross',    gap: 26, channel: 20 },
 ];
 
 // ===================== STATE =====================
@@ -348,7 +348,7 @@ function getShapeVertices(shape, cx, cy, radius) {
     }
 }
 
-function generateLevel(shape, cx, cy, radius, gapWidth) {
+function generateLevel(shape, cx, cy, radius, gapWidth, channelWidth) {
     const verts = getShapeVertices(shape, cx, cy, radius);
     const n = verts.length;
 
@@ -418,22 +418,25 @@ function generateLevel(shape, cx, cy, radius, gapWidth) {
     // Last vertex to gA
     wallSegs.push({ x1: verts[gAIdx].x, y1: verts[gAIdx].y, x2: gA.x, y2: gA.y });
 
-    // Channel walls (vertical, from gap points down to WALL_GAP_Y)
+    // Channel walls (angled, from gap points narrowing to channelWidth at WALL_GAP_Y)
     const channelTopY = Math.max(gA.y, gB.y);
-    wallSegs.push({ x1: gA.x, y1: channelTopY, x2: gA.x, y2: WALL_GAP_Y });
-    wallSegs.push({ x1: gB.x, y1: channelTopY, x2: gB.x, y2: WALL_GAP_Y });
+    const halfCh = channelWidth / 2;
+    const chBotA = { x: midX - halfCh, y: WALL_GAP_Y };
+    const chBotB = { x: midX + halfCh, y: WALL_GAP_Y };
+    wallSegs.push({ x1: gA.x, y1: channelTopY, x2: chBotA.x, y2: chBotA.y });
+    wallSegs.push({ x1: gB.x, y1: channelTopY, x2: chBotB.x, y2: chBotB.y });
 
-    // Wall with gap (horizontal at WALL_GAP_Y)
-    wallSegs.push({ x1: 0, y1: WALL_GAP_Y, x2: gA.x, y2: WALL_GAP_Y });
-    wallSegs.push({ x1: gB.x, y1: WALL_GAP_Y, x2: W, y2: WALL_GAP_Y });
+    // Wall with gap (horizontal at WALL_GAP_Y, using channel width)
+    wallSegs.push({ x1: 0, y1: WALL_GAP_Y, x2: chBotA.x, y2: WALL_GAP_Y });
+    wallSegs.push({ x1: chBotB.x, y1: WALL_GAP_Y, x2: W, y2: WALL_GAP_Y });
 
-    return { walls: wallSegs, gapA: gA, gapB: gB, polygon: verts, channelTopY };
+    return { walls: wallSegs, gapA: gA, gapB: gB, polygon: verts, channelTopY, chBotA, chBotB };
 }
 
 // ===================== LEVEL INIT =====================
 function initLevel(idx) {
     const lvl = LEVELS[idx];
-    const data = generateLevel(lvl.shape, SHAPE_CX, SHAPE_CY, SHAPE_R, lvl.gap);
+    const data = generateLevel(lvl.shape, SHAPE_CX, SHAPE_CY, SHAPE_R, lvl.gap, lvl.channel);
 
     walls = data.walls.map(w => ({...w}));
     goldWallSeg = { x1: data.gapA.x, y1: data.gapA.y, x2: data.gapB.x, y2: data.gapB.y };
@@ -442,17 +445,15 @@ function initLevel(idx) {
     gapB = data.gapB;
     polyVerts = data.polygon;
 
-    // Generate blue blocks inside shape
+    // Generate blue blocks OUTSIDE the shape (in lower play area below wall)
     blueBlocks = [];
-    for (let bx = SHAPE_CX - SHAPE_R; bx <= SHAPE_CX + SHAPE_R; bx += BLUE_SPACING) {
-        for (let by = SHAPE_CY - SHAPE_R; by <= SHAPE_CY + SHAPE_R; by += BLUE_SPACING) {
-            if (pointInPolygon(bx, by, polyVerts)) {
-                const gapMidY = (gapA.y + gapB.y) / 2;
-                const distToGap = Math.abs(by - gapMidY);
-                if (distToGap > 25) {
-                    blueBlocks.push({ x: bx, y: by, r: BLUE_R, alive: true, pulse: Math.random() * Math.PI * 2 });
-                }
-            }
+    const midX = (gapA.x + gapB.x) / 2;
+    const halfCh = lvl.channel / 2;
+    for (let bx = 30; bx <= W - 30; bx += BLUE_SPACING) {
+        for (let by = WALL_GAP_Y + 28; by <= PADDLE_Y - 28; by += BLUE_SPACING) {
+            // Skip the channel passage so ball can travel up freely
+            if (bx > midX - halfCh - 14 && bx < midX + halfCh + 14) continue;
+            blueBlocks.push({ x: bx, y: by, r: BLUE_R, alive: true, pulse: Math.random() * Math.PI * 2 });
         }
     }
 
@@ -585,7 +586,6 @@ function updatePhysics() {
         for (const w of walls) {
             if (ballSegmentCollision(ball, w)) {
                 playSound('wall');
-                consecutiveBlue = 0;
             }
         }
 
@@ -637,6 +637,7 @@ function updatePhysics() {
             ball.vy = -getCurrentBounceSpeed();
             ball.vx = hitPos * 4.5;
             launchFlash = 0.8;
+            consecutiveBlue = 0;
             playSound('paddle');
         }
 
@@ -1042,10 +1043,10 @@ function updateUI() {
         inst.textContent = '移动挡板，点击/空格发射小球';
         inst.style.display = '';
     } else if (mode === 'playing' && goldActive) {
-        inst.textContent = '球弹入通道，击碎金色方块！';
+        inst.textContent = '击打蓝色方块得分！球弹入通道击碎金色方块';
         inst.style.display = '';
     } else if (mode === 'playing' && !goldActive) {
-        inst.textContent = '缺口已开！再次弹入通道进入形状内部';
+        inst.textContent = '金色已破！继续击打蓝色方块得分';
         inst.style.display = '';
     } else {
         inst.style.display = 'none';
