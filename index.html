@@ -224,6 +224,7 @@
     <div id="gameCompleteOverlay" class="overlay hidden">
         <h1>通关成功！</h1>
         <p>恭喜你完成了全部10个关卡！</p>
+        <div id="gcLevelBreakdown" style="color:#aaa;font-size:14px;line-height:1.8;margin-bottom:12px;text-align:center;"></div>
         <p class="total-score" id="gcTotalScore">0</p>
         <button class="btn btn-primary" id="restartGameBtn">再玩一次</button>
     </div>
@@ -266,6 +267,7 @@ let mode = 'menu';
 let levelIdx = 0;
 let totalScore = 0;
 let levelScore = 0;
+let levelDropHistory = [];  // drops per completed level
 let lives = 0;
 let ball = { x: 250, y: 680, vx: 0, vy: 0, r: BALL_R };
 let paddle = { x: 250, y: PADDLE_Y, w: PADDLE_W, h: PADDLE_H };
@@ -1158,6 +1160,8 @@ function updateUI() {
 }
 
 function showLevelComplete() {
+    // Record this level's drop count
+    levelDropHistory[levelIdx] = levelScore;
     document.getElementById('lcLevelScore').textContent = levelScore;
     document.getElementById('lcTotalScore').textContent = totalScore;
     document.getElementById('levelCompleteOverlay').classList.remove('hidden');
@@ -1169,6 +1173,14 @@ function showGameOver() {
 }
 
 function showGameComplete() {
+    // Build per-level breakdown
+    const breakdownEl = document.getElementById('gcLevelBreakdown');
+    let html = '';
+    for (let i = 0; i < LEVELS.length; i++) {
+        const drops = levelDropHistory[i] !== undefined ? levelDropHistory[i] : 0;
+        html += `${LEVELS[i].name}: ${drops}次<br>`;
+    }
+    breakdownEl.innerHTML = html;
     document.getElementById('gcTotalScore').textContent = `总掉落次数: ${totalScore}`;
     document.getElementById('gameCompleteOverlay').classList.remove('hidden');
 }
@@ -1199,6 +1211,7 @@ function init() {
         document.getElementById('menuOverlay').classList.add('hidden');
         levelIdx = 0;
         totalScore = 0;
+        levelDropHistory = [];
         initLevel(0);
     });
 
@@ -1223,6 +1236,7 @@ function init() {
         document.getElementById('gameCompleteOverlay').classList.add('hidden');
         levelIdx = 0;
         totalScore = 0;
+        levelDropHistory = [];
         initLevel(0);
     });
 
