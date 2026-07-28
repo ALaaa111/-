@@ -19,7 +19,7 @@
         #gameContainer {
             position: relative;
             width: 500px;
-            height: 750px;
+            height: 720px;
             max-width: 100vw;
             max-height: 100vh;
         }
@@ -126,13 +126,14 @@
             background: rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 20px;
-            padding: 8px 20px;
+            padding: 6px 14px;
             color: #ccc;
-            font-size: 13px;
+            font-size: 12px;
             cursor: pointer;
             backdrop-filter: blur(8px);
             font-family: inherit;
             transition: all 0.2s;
+            white-space: nowrap;
         }
         .ctrl-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
         #levelDots {
@@ -166,7 +167,7 @@
 </head>
 <body>
 <div id="gameContainer">
-    <canvas id="gameCanvas" width="500" height="750"></canvas>
+    <canvas id="gameCanvas" width="500" height="720"></canvas>
 
     <div id="topBar">
         <div class="info-pill">
@@ -194,6 +195,7 @@
     <div id="controls">
         <button class="ctrl-btn" id="restartBtn">重新开始</button>
         <button class="ctrl-btn" id="resetBallBtn">重置球</button>
+        <button class="ctrl-btn" id="speedBtn">速度 x1.0</button>
         <button class="ctrl-btn" id="skipBtn">跳过本关</button>
     </div>
 
@@ -233,18 +235,18 @@
 
 <script>
 // ===================== CONFIG =====================
-const W = 500, H = 750;
+const W = 500, H = 720;
 const BALL_R = 6;
 const GRAVITY = 0.15;
 const BOUNCE_SPEED = 16.2;
 const MAX_SPEED = 36;
 const PADDLE_W = 80;
 const PADDLE_H = 10;
-const PADDLE_Y = 695;
-const WALL_GAP_Y = 545;
-const CEILING_Y = 20;
-const FAIL_Y = 742;
-const SHAPE_CX = 250, SHAPE_CY = 200, SHAPE_R = 95;
+const PADDLE_Y = 660;
+const WALL_GAP_Y = 520;
+const CEILING_Y = 15;
+const FAIL_Y = 708;
+const SHAPE_CX = 250, SHAPE_CY = 185, SHAPE_R = 95;
 const BLUE_R = 7, BLUE_SPACING = 30;
 
 const LEVELS = [
@@ -270,7 +272,7 @@ let totalScore = 0;
 let levelScore = 0;
 let levelDropHistory = [];  // drops per completed level
 let lives = 0;
-let ball = { x: 250, y: 680, vx: 0, vy: 0, r: BALL_R };
+let ball = { x: 250, y: 645, vx: 0, vy: 0, r: BALL_R };
 let paddle = { x: 250, y: PADDLE_Y, w: PADDLE_W, h: PADDLE_H };
 let walls = [];
 let goldWallSeg = null;
@@ -1116,6 +1118,8 @@ function updateUI() {
     document.getElementById('scoreValue').textContent = levelScore;
     document.getElementById('livesValue').textContent = '∞';
     document.getElementById('speedValue').textContent = `x${speedMultiplier.toFixed(1)}`;
+    const speedBtn = document.getElementById('speedBtn');
+    if (speedBtn) speedBtn.textContent = `速度 x${speedMultiplier.toFixed(1)}`;
 
     const dotsContainer = document.getElementById('levelDots');
     dotsContainer.innerHTML = '';
@@ -1190,11 +1194,13 @@ function init() {
     canvas.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
     window.addEventListener('keydown', onKeyDown);
 
-    // Speed toggle: 1x / 2x
-    document.getElementById('speedToggle').addEventListener('click', () => {
+    // Speed toggle: 1x / 2x (top bar + bottom button)
+    const toggleSpeed = () => {
         speedMultiplier = speedMultiplier === 1 ? 2 : 1;
         updateUI();
-    });
+    };
+    document.getElementById('speedToggle').addEventListener('click', toggleSpeed);
+    document.getElementById('speedBtn').addEventListener('click', toggleSpeed);
 
     document.getElementById('startBtn').addEventListener('click', () => {
         document.getElementById('menuOverlay').classList.add('hidden');
