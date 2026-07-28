@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>弹球入洞 - 经典形状大挑战</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #050510;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+        #gameContainer {
+            position: relative;
+            width: 500px;
+            height: 750px;
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: 16px;
+        }
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(5, 5, 16, 0.85);
+            border-radius: 16px;
+            z-index: 10;
+            transition: opacity 0.3s;
+        }
+        .overlay.hidden { display: none; }
+        .overlay h1 {
+            font-size: 42px;
+            color: #FFD700;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+            margin-bottom: 8px;
+            letter-spacing: 4px;
+        }
+        .overlay h2 {
+            font-size: 32px;
+            color: #00BFFF;
+            text-shadow: 0 0 15px rgba(0, 191, 255, 0.6);
+            margin-bottom: 16px;
+        }
+        .overlay p {
+            color: #aaa;
+            font-size: 16px;
+            margin-bottom: 24px;
+            text-align: center;
+            line-height: 1.6;
+        }
+        .overlay .score-text {
+            color: #FFD700;
+            font-size: 22px;
+            margin-bottom: 8px;
+        }
+        .overlay .total-score {
+            color: #00BFFF;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 24px;
+        }
+        .btn {
+            padding: 14px 40px;
+            font-size: 18px;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+            letter-spacing: 2px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #1a1a2e;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6); }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            margin-top: 12px;
+        }
+        .btn-secondary:hover { background: rgba(255, 255, 255, 0.2); }
+        #topBar {
+            position: absolute;
+            top: 10px; left: 10px; right: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .info-pill {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 20px;
+            padding: 6px 16px;
+            color: #fff;
+            font-size: 14px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .info-pill .label { color: #888; font-size: 11px; }
+        .info-pill .value { font-weight: bold; }
+        #levelName { color: #FFD700; }
+        #scoreValue { color: #00BFFF; }
+        #speedValue { color: #FF6347; }
+        #controls {
+            position: absolute;
+            bottom: 10px; left: 10px; right: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            z-index: 5;
+        }
+        .ctrl-btn {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 8px 20px;
+            color: #ccc;
+            font-size: 13px;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .ctrl-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+        #levelDots {
+            position: absolute;
+            top: 50px; left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 6px;
+            z-index: 5;
+        }
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+        }
+        .dot.completed { background: #00BFFF; }
+        .dot.current { background: #FFD700; box-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
+        .instruction {
+            position: absolute;
+            bottom: 50px; left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 13px;
+            z-index: 5;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="500" height="750"></canvas>
+
+    <div id="topBar">
+        <div class="info-pill">
+            <div class="label">关卡</div>
+            <div class="value" id="levelName">圆形</div>
+        </div>
+        <div class="info-pill">
+            <div class="label">得分</div>
+            <div class="value" id="scoreValue">0</div>
+        </div>
+        <div class="info-pill">
+            <div class="label">速度</div>
+            <div class="value" id="speedValue">x1.0</div>
+        </div>
+    </div>
+
+    <div id="levelDots"></div>
+
+    <div class="instruction" id="instruction">拖动小球瞄准，松手发射</div>
+
+    <div id="controls">
+        <button class="ctrl-btn" id="restartBtn">重新开始</button>
+        <button class="ctrl-btn" id="skipBtn">跳过本关</button>
+    </div>
+
+    <div id="menuOverlay" class="overlay">
+        <h1>弹球入洞</h1>
+        <p>经典形状大挑战<br>瞄准通道，让球弹入并击破金色缺口<br>再次进入通道，球入洞内打蓝色得分！</p>
+        <button class="btn btn-primary" id="startBtn">开始游戏</button>
+    </div>
+
+    <div id="levelCompleteOverlay" class="overlay hidden">
+        <h2>关卡完成！</h2>
+        <p class="score-text">本关得分: <span id="lcLevelScore">0</span></p>
+        <p class="total-score">总分: <span id="lcTotalScore">0</span></p>
+        <button class="btn btn-primary" id="nextLevelBtn">下一关</button>
+    </div>
+
+    <div id="gameCompleteOverlay" class="overlay hidden">
+        <h1>通关成功！</h1>
+        <p>恭喜你完成了全部10个关卡！</p>
+        <p class="total-score" id="gcTotalScore">0</p>
+        <button class="btn btn-primary" id="restartGameBtn">再玩一次</button>
+    </div>
+</div>
+
+<script>
+// ===================== CONFIG =====================
+const W = 500, H = 750;
+const BALL_R = 8;
+const BASE_SPEED = 4.2;
+const MAX_SPEED = 11;
+const SHAPE_CX = 250, SHAPE_CY = 250;
+const SHAPE_R = 115;
+const CHANNEL_LEN = 175;
+const BALL_START_Y = 665;
+const BLUE_R = 7;
+const BLUE_SPACING = 34;
+
+const LEVELS = [
+    { name: '圆形',   shape: 'circle',   gap: 88 },
+    { name: '方形',   shape: 'square',   gap: 74 },
+    { name: '三角形', shape: 'triangle', gap: 64 },
+    { name: '五边形', shape: 'pentagon', gap: 55 },
+    { name: '六边形', shape: 'hexagon',  gap: 48 },
+    { name: '五角星', shape: 'star',     gap: 42 },
+    { name: '心形',   shape: 'heart',    gap: 38 },
+    { name: '菱形',   shape: 'diamond',  gap: 34 },
+    { name: '八角形', shape: 'octagon',  gap: 30 },
+    { name: '十字形', shape: 'cross',    gap: 26 },
+];
+
+// ===================== STATE =====================
+let canvas, ctx;
+let mode = 'menu'; // menu, aiming, playing, levelComplete, gameComplete
+let levelIdx = 0;
+let totalScore = 0;
+let levelScore = 0;
+let ball = { x: 250, y: 680, vx: 0, vy: 0 };
+let walls = [];
+let goldWallSeg = null;
+let gapA = null, gapB = null;
+let gapState = 'sealed_gold'; // sealed_gold, open, sealed_wall
+let polyVerts = [];
+let blueBlocks = [];
+let consecutiveBlue = 0;
+let speedBoosts = 0;
+let particles = [];
+let trail = [];
+let aimStart = null;
+let aimEnd = null;
+let wasInside = false;
+let shakeAmount = 0;
+let goldPulse = 0;
+let launchFlash = 0;
+let audioCtx = null;
+
+// ===================== SHAPE GENERATION =====================
+function generatePolygon(cx, cy, radius, sides) {
+    const verts = [];
+    const baseAngle = Math.PI / 2 + Math.PI / sides;
+    for (let i = 0; i < sides; i++) {
+        const angle = baseAngle + (i / sides) * Math.PI * 2;
+        verts.push({ x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
+    }
+    return verts;
+}
+
+function generateStar(cx, cy, radius, points) {
+    const verts = [];
+    const innerR = radius * 0.42;
+    const baseAngle = Math.PI / 2 + Math.PI / (points * 2);
+    for (let i = 0; i < points * 2; i++) {
+        const angle = baseAngle + (i / (points * 2)) * Math.PI * 2;
+        const r = i % 2 === 0 ? radius : innerR;
+        verts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
+    }
+    return verts;
+}
+
+function generateHeart(cx, cy, radius) {
+    const verts = [];
+    const steps = 40;
+    const scale = radius / 17;
+    for (let i = 0; i < steps; i++) {
+        const t = (i / steps) * Math.PI * 2;
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+        verts.push({ x: cx + x * scale, y: cy + y * scale - 5 });
+    }
+    return verts;
+}
+
+function generateCross(cx, cy, radius) {
+    const r = radius;
+    const t = radius * 0.32;
+    return [
+        { x: cx - t, y: cy - r },    { x: cx + t, y: cy - r },
+        { x: cx + t, y: cy - t },    { x: cx + r, y: cy - t },
+        { x: cx + r, y: cy + t },    { x: cx + t, y: cy + t },
+        { x: cx + t, y: cy + r },    { x: cx - t, y: cy + r },
+        { x: cx - t, y: cy + t },    { x: cx - r, y: cy + t },
+        { x: cx - r, y: cy - t },    { x: cx - t, y: cy - t },
+    ];
+}
+
+function getShapeVertices(shape, cx, cy, radius) {
+    switch (shape) {
+        case 'circle':   return generatePolygon(cx, cy, radius, 48);
+        case 'square':   return generatePolygon(cx, cy, radius, 4);
+        case 'triangle': return generatePolygon(cx, cy, radius, 3);
+        case 'pentagon': return generatePolygon(cx, cy, radius, 5);
+        case 'hexagon':  return generatePolygon(cx, cy, radius, 6);
+        case 'octagon':  return generatePolygon(cx, cy, radius, 8);
+        case 'star':     return generateStar(cx, cy, radius, 5);
+        case 'heart':    return generateHeart(cx, cy, radius);
+        case 'diamond':  return generatePolygon(cx, cy, radius, 4);
+        case 'cross':    return generateCross(cx, cy, radius);
+        default:         return generatePolygon(cx, cy, radius, 6);
+    }
+}
+
+function generateLevel(shape, cx, cy, radius, gapWidth, channelLen) {
+    const verts = getShapeVertices(shape, cx, cy, radius);
+    const n = verts.length;
+
+    // Find bottommost edge by midpoint Y
+    let beIdx = 0;
+    let bestMidY = -Infinity;
+    for (let i = 0; i < n; i++) {
+        const midY = (verts[i].y + verts[(i+1)%n].y) / 2;
+        if (midY > bestMidY) { bestMidY = midY; beIdx = i; }
+    }
+
+    const e1 = verts[beIdx];
+    const e2 = verts[(beIdx+1)%n];
+    const midX = (e1.x + e2.x) / 2;
+    const halfGap = gapWidth / 2;
+
+    // Helper: find point on polygon boundary near target X by walking from start
+    function findPointByX(startIdx, startPt, targetX, walkDir) {
+        // First check if targetX lies on the starting edge
+        const edgeMinX = Math.min(e1.x, e2.x), edgeMaxX = Math.max(e1.x, e2.x);
+        if (targetX >= edgeMinX && targetX <= edgeMaxX) {
+            const dx = e2.x - e1.x;
+            const t = Math.abs(dx) > 0.001 ? (targetX - e1.x) / dx : 0.5;
+            return { pt: { x: targetX, y: e1.y + (e2.y - e1.y) * t }, nextIdx: (beIdx + 1) % n, prevIdx: beIdx };
+        }
+
+        let best = { pt: startPt, idx: startIdx, err: Math.abs(startPt.x - targetX) };
+        let curr = startIdx;
+        let p = startPt;
+
+        for (let step = 0; step < n; step++) {
+            const nextIdx = walkDir > 0 ? (curr + 1) % n : (curr - 1 + n) % n;
+            const np = verts[nextIdx];
+            const segMinX = Math.min(p.x, np.x), segMaxX = Math.max(p.x, np.x);
+
+            if (targetX >= segMinX - 0.001 && targetX <= segMaxX + 0.001) {
+                const dx = np.x - p.x;
+                const t = Math.abs(dx) > 0.001 ? (targetX - p.x) / dx : 0.5;
+                return { pt: { x: targetX, y: p.y + (np.y - p.y) * t }, nextIdx: walkDir > 0 ? nextIdx : curr, prevIdx: walkDir > 0 ? curr : nextIdx };
+            }
+
+            const err = Math.abs(np.x - targetX);
+            if (err < best.err) {
+                best = { pt: { x: np.x, y: np.y }, idx: nextIdx, err };
+            }
+            p = np;
+            curr = nextIdx;
+        }
+        return { pt: best.pt, nextIdx: walkDir > 0 ? (best.idx + 1) % n : best.idx, prevIdx: walkDir > 0 ? best.idx : (best.idx - 1 + n) % n };
+    }
+
+    // Find gA by walking left to match target X
+    const targetXA = midX - halfGap;
+    const resA = findPointByX(beIdx, e1, targetXA, -1);
+    const gA = resA.pt;
+    const gAPrevIdx = resA.prevIdx;
+
+    // Find gB by walking right to match target X
+    const targetXB = midX + halfGap;
+    const resB = findPointByX((beIdx + 1) % n, e2, targetXB, 1);
+    const gB = resB.pt;
+    const gBNextIdx = resB.nextIdx;
+
+    // Build walls from gB clockwise around the top to gA
+    const wallSegs = [];
+    wallSegs.push({ x1: gB.x, y1: gB.y, x2: verts[gBNextIdx].x, y2: verts[gBNextIdx].y });
+    let curr = gBNextIdx;
+    while (curr !== gAPrevIdx) {
+        const next = (curr + 1) % n;
+        wallSegs.push({ x1: verts[curr].x, y1: verts[curr].y, x2: verts[next].x, y2: verts[next].y });
+        curr = next;
+    }
+    wallSegs.push({ x1: verts[gAPrevIdx].x, y1: verts[gAPrevIdx].y, x2: gA.x, y2: gA.y });
+
+    // Add vertical channel walls going down from gA and gB
+    const channelBottomY = Math.max(gA.y, gB.y) + channelLen;
+    wallSegs.push({ x1: gA.x, y1: gA.y, x2: gA.x, y2: channelBottomY });
+    wallSegs.push({ x1: gB.x, y1: gB.y, x2: gB.x, y2: channelBottomY });
+
+    return { walls: wallSegs, gapA: gA, gapB: gB, polygon: verts, channelBottomY };
+}
+
+// ===================== LEVEL INIT =====================
+function initLevel(idx) {
+    const lvl = LEVELS[idx];
+    const data = generateLevel(lvl.shape, SHAPE_CX, SHAPE_CY, SHAPE_R, lvl.gap, CHANNEL_LEN);
+
+    walls = data.walls.map(w => ({...w}));
+    goldWallSeg = { x1: data.gapA.x, y1: data.gapA.y, x2: data.gapB.x, y2: data.gapB.y };
+    gapA = data.gapA;
+    gapB = data.gapB;
+    gapState = 'sealed_gold';
+    polyVerts = data.polygon;
+
+    // Generate blue blocks inside shape
+    blueBlocks = [];
+    for (let bx = SHAPE_CX - SHAPE_R; bx <= SHAPE_CX + SHAPE_R; bx += BLUE_SPACING) {
+        for (let by = SHAPE_CY - SHAPE_R; by <= SHAPE_CY + SHAPE_R; by += BLUE_SPACING) {
+            const jitter = 0; // could add random offset
+            const px = bx + jitter, py = by + jitter;
+            if (pointInPolygon(px, py, polyVerts)) {
+                // Don't place too close to gap
+                const gapMidX = (gapA.x + gapB.x) / 2;
+                const gapMidY = (gapA.y + gapB.y) / 2;
+                const distToGap = Math.sqrt((px - gapMidX)**2 + (py - gapMidY)**2);
+                if (distToGap > 30) {
+                    blueBlocks.push({ x: px, y: py, r: BLUE_R, alive: true, pulse: Math.random() * Math.PI * 2 });
+                }
+            }
+        }
+    }
+
+    ball.x = 250;
+    ball.y = BALL_START_Y;
+    ball.vx = 0;
+    ball.vy = 0;
+    consecutiveBlue = 0;
+    speedBoosts = 0;
+    particles = [];
+    trail = [];
+    wasInside = false;
+    shakeAmount = 0;
+    launchFlash = 0;
+    levelScore = 0;
+    mode = 'aiming';
+
+    updateUI();
+}
+
+// ===================== PHYSICS =====================
+function pointInPolygon(x, y, verts) {
+    let inside = false;
+    for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+        const xi = verts[i].x, yi = verts[i].y;
+        const xj = verts[j].x, yj = verts[j].y;
+        if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+function ballSegmentCollision(b, seg) {
+    const dx = seg.x2 - seg.x1;
+    const dy = seg.y2 - seg.y1;
+    const lenSq = dx*dx + dy*dy;
+    if (lenSq < 0.001) return false;
+    let t = ((b.x - seg.x1) * dx + (b.y - seg.y1) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    const cx = seg.x1 + t * dx;
+    const cy = seg.y1 + t * dy;
+    const ddx = b.x - cx;
+    const ddy = b.y - cy;
+    const distSq = ddx*ddx + ddy*ddy;
+    if (distSq < b.r * b.r) {
+        const dist = Math.sqrt(distSq) || 0.001;
+        const nx = ddx / dist;
+        const ny = ddy / dist;
+        const overlap = b.r - dist;
+        b.x += nx * overlap;
+        b.y += ny * overlap;
+        const dot = b.vx * nx + b.vy * ny;
+        if (dot < 0) {
+            b.vx -= 2 * dot * nx;
+            b.vy -= 2 * dot * ny;
+            // Small random perturbation to avoid infinite loops
+            b.vx += (Math.random() - 0.5) * 0.15;
+            b.vy += (Math.random() - 0.5) * 0.15;
+        }
+        return true;
+    }
+    return false;
+}
+
+function ballCircleCollision(b, c) {
+    const dx = b.x - c.x;
+    const dy = b.y - c.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < b.r + c.r) {
+        const nx = dx / (dist || 0.001);
+        const ny = dy / (dist || 0.001);
+        const overlap = b.r + c.r - dist;
+        b.x += nx * overlap;
+        b.y += ny * overlap;
+        const dot = b.vx * nx + b.vy * ny;
+        if (dot < 0) {
+            b.vx -= 2 * dot * nx;
+            b.vy -= 2 * dot * ny;
+        }
+        return true;
+    }
+    return false;
+}
+
+function getCurrentSpeed() {
+    let s = BASE_SPEED * (1 + speedBoosts * 0.25);
+    return Math.min(s, MAX_SPEED);
+}
+
+function enforceSpeed() {
+    const target = getCurrentSpeed();
+    const sp = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+    if (sp > 0.01) {
+        ball.vx = (ball.vx / sp) * target;
+        ball.vy = (ball.vy / sp) * target;
+    }
+}
+
+function updatePhysics() {
+    if (mode !== 'playing') return;
+
+    const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+    const steps = Math.max(1, Math.ceil(speed / (BALL_R * 0.6)));
+    const dt = 1 / steps;
+
+    for (let s = 0; s < steps; s++) {
+        ball.x += ball.vx * dt;
+        ball.y += ball.vy * dt;
+
+        // Canvas boundary
+        if (ball.x < BALL_R) { ball.x = BALL_R; ball.vx = Math.abs(ball.vx); playSound('wall'); }
+        if (ball.x > W - BALL_R) { ball.x = W - BALL_R; ball.vx = -Math.abs(ball.vx); playSound('wall'); }
+        if (ball.y < BALL_R) { ball.y = BALL_R; ball.vy = Math.abs(ball.vy); playSound('wall'); }
+        if (ball.y > H - BALL_R) { ball.y = H - BALL_R; ball.vy = -Math.abs(ball.vy); playSound('wall'); }
+
+        // Gold wall collision
+        if (gapState === 'sealed_gold' && goldWallSeg) {
+            if (ballSegmentCollision(ball, goldWallSeg)) {
+                gapState = 'open';
+                spawnParticles((gapA.x + gapB.x)/2, (gapA.y + gapB.y)/2, '#FFD700', 18);
+                playSound('gapBreak');
+                enforceSpeed();
+            }
+        }
+
+        // Sealed wall collision (after ball entered)
+        if (gapState === 'sealed_wall' && goldWallSeg) {
+            ballSegmentCollision(ball, goldWallSeg);
+        }
+
+        // Shape walls collision
+        for (const w of walls) {
+            if (ballSegmentCollision(ball, w)) {
+                playSound('wall');
+                consecutiveBlue = 0; // reset on wall hit
+                enforceSpeed();
+            }
+        }
+
+        // Check ball entry
+        if (gapState === 'open') {
+            const inside = pointInPolygon(ball.x, ball.y, polyVerts);
+            if (inside && !wasInside) {
+                gapState = 'sealed_wall';
+                spawnParticles(ball.x, ball.y, '#FFD700', 15);
+                playSound('gapSeal');
+            }
+            wasInside = inside;
+        }
+
+        // Blue block collisions
+        for (let i = blueBlocks.length - 1; i >= 0; i--) {
+            const blk = blueBlocks[i];
+            if (!blk.alive) continue;
+            if (ballCircleCollision(ball, blk)) {
+                blk.alive = false;
+                blueBlocks.splice(i, 1);
+                const pts = 10 * (levelIdx + 1);
+                levelScore += pts;
+                totalScore += pts;
+                consecutiveBlue++;
+                spawnParticles(blk.x, blk.y, '#00BFFF', 10);
+                playSound('blueHit');
+                enforceSpeed();
+
+                if (consecutiveBlue >= 3) {
+                    consecutiveBlue = 0;
+                    speedBoosts++;
+                    spawnParticles(ball.x, ball.y, '#FFD700', 25);
+                    shakeAmount = 12;
+                    playSound('speedBoost');
+                    enforceSpeed();
+                }
+
+                // Check level complete
+                if (blueBlocks.length === 0 && gapState === 'sealed_wall') {
+                    mode = 'levelComplete';
+                    setTimeout(showLevelComplete, 600);
+                    playSound('levelComplete');
+                    return;
+                }
+            }
+        }
+    }
+
+    // Trail
+    trail.push({ x: ball.x, y: ball.y });
+    if (trail.length > 12) trail.shift();
+
+    // Shake decay
+    if (shakeAmount > 0) shakeAmount *= 0.85;
+    if (launchFlash > 0) launchFlash *= 0.9;
+}
+
+// ===================== PARTICLES =====================
+function spawnParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+        const speed = 1 + Math.random() * 3;
+        particles.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1,
+            color,
+            r: 2 + Math.random() * 3
+        });
+    }
+}
+
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.94;
+        p.vy *= 0.94;
+        p.life -= 0.025;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+// ===================== RENDERING =====================
+function render() {
+    ctx.save();
+
+    // Screen shake
+    if (shakeAmount > 0.5) {
+        ctx.translate((Math.random()-0.5) * shakeAmount, (Math.random()-0.5) * shakeAmount);
+    }
+
+    // Background
+    const bgGrad = ctx.createRadialGradient(W/2, H/2, 50, W/2, H/2, 500);
+    bgGrad.addColorStop(0, '#0d0d28');
+    bgGrad.addColorStop(1, '#050510');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+    for (let y = 0; y < H; y += 40) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+
+    goldPulse += 0.05;
+
+    // Draw shape walls
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Glow walls
+    ctx.shadowColor = 'rgba(255,255,255,0.4)';
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 4;
+    for (const w of walls) {
+        ctx.beginPath();
+        ctx.moveTo(w.x1, w.y1);
+        ctx.lineTo(w.x2, w.y2);
+        ctx.stroke();
+    }
+
+    // Draw gap
+    if (gapState === 'sealed_gold' && goldWallSeg) {
+        const pulse = 0.5 + Math.sin(goldPulse) * 0.3;
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = 15 + pulse * 10;
+        ctx.strokeStyle = `rgba(255, 215, 0, ${0.8 + pulse * 0.2})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(goldWallSeg.x1, goldWallSeg.y1);
+        ctx.lineTo(goldWallSeg.x2, goldWallSeg.y2);
+        ctx.stroke();
+
+        // Gap indicators (arrows pointing up toward gap from channel)
+        const gapMidX = (goldWallSeg.x1 + goldWallSeg.x2) / 2;
+        const gapMidY = (goldWallSeg.y1 + goldWallSeg.y2) / 2;
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = `rgba(255, 215, 0, ${0.3 + pulse * 0.3})`;
+        ctx.font = '18px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('▲', gapMidX, gapMidY + 28);
+    } else if (gapState === 'sealed_wall' && goldWallSeg) {
+        ctx.shadowColor = 'rgba(255,100,100,0.3)';
+        ctx.shadowBlur = 5;
+        ctx.strokeStyle = 'rgba(200, 200, 200, 0.6)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(goldWallSeg.x1, goldWallSeg.y1);
+        ctx.lineTo(goldWallSeg.x2, goldWallSeg.y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    ctx.shadowBlur = 0;
+
+    // Draw blue blocks
+    for (const blk of blueBlocks) {
+        if (!blk.alive) continue;
+        blk.pulse += 0.03;
+        const pulse = 0.7 + Math.sin(blk.pulse) * 0.3;
+        ctx.shadowColor = '#00BFFF';
+        ctx.shadowBlur = 8 + pulse * 4;
+        const grad = ctx.createRadialGradient(blk.x, blk.y, 0, blk.x, blk.y, blk.r);
+        grad.addColorStop(0, '#7FDFFF');
+        grad.addColorStop(0.6, '#00BFFF');
+        grad.addColorStop(1, '#0080CC');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(blk.x, blk.y, blk.r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+
+    // Draw trail
+    for (let i = 0; i < trail.length; i++) {
+        const alpha = (i / trail.length) * 0.4;
+        const r = BALL_R * (i / trail.length) * 0.8;
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(trail[i].x, trail[i].y, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Draw ball
+    if (mode === 'playing' || mode === 'aiming') {
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 12 + launchFlash * 20;
+        const ballGrad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 0, ball.x, ball.y, BALL_R);
+        ballGrad.addColorStop(0, '#ffffff');
+        ballGrad.addColorStop(0.7, '#e0e0ff');
+        ballGrad.addColorStop(1, '#aaaacc');
+        ctx.fillStyle = ballGrad;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+
+    // Draw aim line
+    if (mode === 'aiming' && aimStart && aimEnd) {
+        const dx = aimStart.x - aimEnd.x;
+        const dy = aimStart.y - aimEnd.y;
+        const len = Math.sqrt(dx*dx + dy*dy);
+        const power = Math.min(len / 150, 1);
+
+        // Dashed aim line
+        ctx.strokeStyle = `rgba(255, 215, 0, ${0.4 + power * 0.4})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(ball.x, ball.y);
+        ctx.lineTo(ball.x + dx * 0.8, ball.y + dy * 0.8);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Power circle
+        ctx.strokeStyle = `rgba(255, 215, 0, ${0.3 + power * 0.5})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, BALL_R + 4 + power * 8, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Direction arrow
+        const arrowX = ball.x + dx * 0.8;
+        const arrowY = ball.y + dy * 0.8;
+        const angle = Math.atan2(dy, dx);
+        ctx.fillStyle = `rgba(255, 215, 0, ${0.6 + power * 0.4})`;
+        ctx.beginPath();
+        ctx.moveTo(arrowX, arrowY);
+        ctx.lineTo(arrowX - Math.cos(angle - 0.4) * 10, arrowY - Math.sin(angle - 0.4) * 10);
+        ctx.lineTo(arrowX - Math.cos(angle + 0.4) * 10, arrowY - Math.sin(angle + 0.4) * 10);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Draw particles
+    for (const p of particles) {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+}
+
+// ===================== INPUT =====================
+function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width;
+    const sy = canvas.height / rect.height;
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: (cx - rect.left) * sx, y: (cy - rect.top) * sy };
+}
+
+function onPointerDown(e) {
+    e.preventDefault();
+    if (audioCtx === null) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(ex) {}
+    }
+    if (mode !== 'aiming') return;
+    const pos = getCanvasPos(e);
+    const dist = Math.sqrt((pos.x - ball.x)**2 + (pos.y - ball.y)**2);
+    if (dist < 60) {
+        aimStart = { x: ball.x, y: ball.y };
+        aimEnd = pos;
+    }
+}
+
+function onPointerMove(e) {
+    e.preventDefault();
+    if (mode !== 'aiming' || !aimStart) return;
+    aimEnd = getCanvasPos(e);
+}
+
+function onPointerUp(e) {
+    e.preventDefault();
+    if (mode !== 'aiming' || !aimStart || !aimEnd) return;
+    const dx = aimStart.x - aimEnd.x;
+    const dy = aimStart.y - aimEnd.y;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    if (len > 10) {
+        const power = Math.min(len / 150, 1);
+        const speed = BASE_SPEED * (0.5 + power * 0.5);
+        ball.vx = (dx / len) * speed;
+        ball.vy = (dy / len) * speed;
+        mode = 'playing';
+        launchFlash = 1;
+        playSound('launch');
+    }
+    aimStart = null;
+    aimEnd = null;
+}
+
+// ===================== AUDIO =====================
+function playSound(type) {
+    if (!audioCtx) return;
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+
+        switch (type) {
+            case 'wall':
+                osc.type = 'square';
+                osc.frequency.value = 180;
+                gain.gain.setValueAtTime(0.04, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                osc.start(now); osc.stop(now + 0.08);
+                break;
+            case 'blueHit':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(900, now + 0.1);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
+                break;
+            case 'gapBreak':
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.2);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                osc.start(now); osc.stop(now + 0.25);
+                break;
+            case 'gapSeal':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+                break;
+            case 'speedBoost':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(500, now);
+                osc.frequency.exponentialRampToValueAtTime(1500, now + 0.3);
+                gain.gain.setValueAtTime(0.12, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                osc.start(now); osc.stop(now + 0.35);
+                break;
+            case 'launch':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(500, now + 0.1);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                osc.start(now); osc.stop(now + 0.12);
+                break;
+            case 'levelComplete':
+                [523, 659, 784, 1047].forEach((freq, i) => {
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.connect(g); g.connect(audioCtx.destination);
+                    o.type = 'sine';
+                    o.frequency.value = freq;
+                    g.gain.setValueAtTime(0, now + i * 0.1);
+                    g.gain.linearRampToValueAtTime(0.1, now + i * 0.1 + 0.02);
+                    g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.3);
+                    o.start(now + i * 0.1);
+                    o.stop(now + i * 0.1 + 0.3);
+                });
+                break;
+        }
+    } catch(ex) {}
+}
+
+// ===================== UI =====================
+function updateUI() {
+    document.getElementById('levelName').textContent = `${levelIdx + 1}. ${LEVELS[levelIdx].name}`;
+    document.getElementById('scoreValue').textContent = totalScore;
+    const speedMul = (1 + speedBoosts * 0.25).toFixed(1);
+    document.getElementById('speedValue').textContent = `x${speedMul}`;
+
+    // Level dots
+    const dotsContainer = document.getElementById('levelDots');
+    dotsContainer.innerHTML = '';
+    for (let i = 0; i < LEVELS.length; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        if (i < levelIdx) dot.classList.add('completed');
+        if (i === levelIdx) dot.classList.add('current');
+        dotsContainer.appendChild(dot);
+    }
+
+    // Instruction
+    const inst = document.getElementById('instruction');
+    if (mode === 'aiming') {
+        inst.textContent = '拖动小球瞄准，松手发射';
+        inst.style.display = '';
+    } else if (mode === 'playing' && gapState === 'sealed_gold') {
+        inst.textContent = '瞄准通道，让球弹入并打到金色缺口！';
+        inst.style.display = '';
+    } else if (mode === 'playing' && gapState === 'open') {
+        inst.textContent = '缺口已打开！再次让球进入通道打入缺口';
+        inst.style.display = '';
+    } else if (mode === 'playing' && gapState === 'sealed_wall') {
+        inst.textContent = '连续击中蓝色方块加速得分！';
+        inst.style.display = '';
+    } else {
+        inst.style.display = 'none';
+    }
+}
+
+function showLevelComplete() {
+    document.getElementById('lcLevelScore').textContent = levelScore;
+    document.getElementById('lcTotalScore').textContent = totalScore;
+    document.getElementById('levelCompleteOverlay').classList.remove('hidden');
+}
+
+function showGameComplete() {
+    document.getElementById('gcTotalScore').textContent = `总分: ${totalScore}`;
+    document.getElementById('gameCompleteOverlay').classList.remove('hidden');
+}
+
+// ===================== GAME LOOP =====================
+function gameLoop() {
+    updatePhysics();
+    updateParticles();
+    render();
+    updateUI();
+    requestAnimationFrame(gameLoop);
+}
+
+// ===================== INIT =====================
+function init() {
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+
+    // Input
+    canvas.addEventListener('mousedown', onPointerDown);
+    canvas.addEventListener('mousemove', onPointerMove);
+    canvas.addEventListener('mouseup', onPointerUp);
+    canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+    canvas.addEventListener('touchmove', onPointerMove, { passive: false });
+    canvas.addEventListener('touchend', onPointerUp, { passive: false });
+
+    // Buttons
+    document.getElementById('startBtn').addEventListener('click', () => {
+        document.getElementById('menuOverlay').classList.add('hidden');
+        levelIdx = 0;
+        totalScore = 0;
+        initLevel(0);
+    });
+
+    document.getElementById('nextLevelBtn').addEventListener('click', () => {
+        document.getElementById('levelCompleteOverlay').classList.add('hidden');
+        levelIdx++;
+        if (levelIdx >= LEVELS.length) {
+            mode = 'gameComplete';
+            showGameComplete();
+        } else {
+            initLevel(levelIdx);
+        }
+    });
+
+    document.getElementById('restartGameBtn').addEventListener('click', () => {
+        document.getElementById('gameCompleteOverlay').classList.add('hidden');
+        levelIdx = 0;
+        totalScore = 0;
+        initLevel(0);
+    });
+
+    document.getElementById('restartBtn').addEventListener('click', () => {
+        totalScore -= levelScore;
+        initLevel(levelIdx);
+    });
+
+    document.getElementById('skipBtn').addEventListener('click', () => {
+        if (mode === 'gameComplete') return;
+        levelIdx++;
+        if (levelIdx >= LEVELS.length) {
+            mode = 'gameComplete';
+            showGameComplete();
+        } else {
+            initLevel(levelIdx);
+        }
+    });
+
+    gameLoop();
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
