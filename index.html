@@ -181,7 +181,7 @@
             <div class="label">本关掉落</div>
             <div class="value" id="scoreValue">0</div>
         </div>
-        <div class="info-pill">
+        <div class="info-pill" style="cursor:pointer" id="speedToggle">
             <div class="label">速度</div>
             <div class="value" id="speedValue">x1.0</div>
         </div>
@@ -193,6 +193,7 @@
 
     <div id="controls">
         <button class="ctrl-btn" id="restartBtn">重新开始</button>
+        <button class="ctrl-btn" id="resetBallBtn">重置球</button>
         <button class="ctrl-btn" id="skipBtn">跳过本关</button>
     </div>
 
@@ -203,7 +204,7 @@
         球弹入通道击碎金色方块<br>
         再次进入通道穿过缺口<br>
         吃完所有蓝色方块即可过关！<br>
-        连续3次击中蓝色触发加速！<br><br>
+        点击右上角速度切换 1倍/2倍<br><br>
         掉落次数越少，技术越好！</p>
         <button class="btn btn-primary" id="startBtn">开始游戏</button>
     </div>
@@ -236,7 +237,7 @@ const W = 500, H = 750;
 const BALL_R = 6;
 const GRAVITY = 0.15;
 const BOUNCE_SPEED = 16.2;
-const MAX_SPEED = 18;
+const MAX_SPEED = 36;
 const PADDLE_W = 80;
 const PADDLE_H = 10;
 const PADDLE_Y = 695;
@@ -247,16 +248,16 @@ const SHAPE_CX = 250, SHAPE_CY = 200, SHAPE_R = 95;
 const BLUE_R = 7, BLUE_SPACING = 30;
 
 const LEVELS = [
-    { name: '圆形',   shape: 'circle',   channel: 80, gold: 28 },
-    { name: '方形',   shape: 'square',   channel: 66, gold: 28 },
-    { name: '三角形', shape: 'triangle', channel: 54, gold: 28 },
-    { name: '五边形', shape: 'pentagon', channel: 44, gold: 28 },
-    { name: '六边形', shape: 'hexagon',  channel: 38, gold: 28 },
-    { name: '五角星', shape: 'star',     channel: 32, gold: 14 },
-    { name: '心形',   shape: 'heart',    channel: 28, gold: 14 },
-    { name: '菱形',   shape: 'diamond',  channel: 24, gold: 14 },
-    { name: '八角形', shape: 'octagon',  channel: 22, gold: 14 },
-    { name: '十字形', shape: 'cross',    channel: 20, gold: 14 },
+    { name: '方形',   shape: 'square',   channel: 80, gold: 28 },
+    { name: '三角形', shape: 'triangle', channel: 66, gold: 28 },
+    { name: '五边形', shape: 'pentagon', channel: 54, gold: 28 },
+    { name: '六边形', shape: 'hexagon',  channel: 44, gold: 28 },
+    { name: '五角星', shape: 'star',     channel: 38, gold: 14 },
+    { name: '心形',   shape: 'heart',    channel: 32, gold: 14 },
+    { name: '菱形',   shape: 'diamond',  channel: 28, gold: 14 },
+    { name: '八角形', shape: 'octagon',  channel: 24, gold: 14 },
+    { name: '十字形', shape: 'cross',    channel: 22, gold: 14 },
+    { name: '圆形',   shape: 'circle',   channel: 20, gold: 14 },
 ];
 
 // totalScore = cumulative drop count across all levels
@@ -277,8 +278,8 @@ let goldActive = false;
 let gapA = null, gapB = null;
 let polyVerts = [];
 let blueBlocks = [];
-let consecutiveBlue = 0;
-let speedBoosts = 0;
+let consecutiveBlue = 0;  // kept for resetting on paddle hit, no longer triggers boost
+let speedMultiplier = 1;  // 1 or 2, user-selected
 let particles = [];
 let trail = [];
 let shakeAmount = 0;
@@ -480,7 +481,8 @@ function generateLevel(shape, cx, cy, radius, channelWidth, goldWidth) {
         }
     }
 
-    // Horizontal wall at goldY: from shape edge to gold gap (seals the top)
+    // Horizontal wall at goldY: seal the top, leaving the gold gap open
+    // Only seal the center span (the one containing cx) — other spans are part of the shape border
     const goldXs = getPolyXAtY(verts, goldY);
     for (let i = 0; i < goldXs.length - 1; i += 2) {
         const leftX = goldXs[i].x;
@@ -488,13 +490,11 @@ function generateLevel(shape, cx, cy, radius, channelWidth, goldWidth) {
         if (leftX <= cx && rightX >= cx) {
             if (leftX < goldLeftX) wallSegs.push({ x1: leftX, y1: goldY, x2: goldLeftX, y2: goldY });
             if (rightX > goldRightX) wallSegs.push({ x1: goldRightX, y1: goldY, x2: rightX, y2: goldY });
-        } else {
-            wallSegs.push({ x1: leftX, y1: goldY, x2: rightX, y2: goldY });
         }
     }
 
-    // Horizontal wall at channelY: from shape edge to entrance gap (seals the bottom)
-    // Entrance gap = channel width (same width, no bridge walls needed)
+    // Horizontal wall at channelY: seal the bottom, leaving the entrance gap open
+    // Only seal the center span (the one containing cx)
     const chXs = getPolyXAtY(verts, channelY);
     for (let i = 0; i < chXs.length - 1; i += 2) {
         const leftX = chXs[i].x;
@@ -502,8 +502,6 @@ function generateLevel(shape, cx, cy, radius, channelWidth, goldWidth) {
         if (leftX <= cx && rightX >= cx) {
             if (leftX < gapLeftX) wallSegs.push({ x1: leftX, y1: channelY, x2: gapLeftX, y2: channelY });
             if (rightX > gapRightX) wallSegs.push({ x1: gapRightX, y1: channelY, x2: rightX, y2: channelY });
-        } else {
-            wallSegs.push({ x1: leftX, y1: channelY, x2: rightX, y2: channelY });
         }
     }
 
@@ -575,7 +573,7 @@ function initLevel(idx) {
     ball.vx = 0;
     ball.vy = 0;
     consecutiveBlue = 0;
-    speedBoosts = 0;
+    // speedMultiplier persists across levels (user choice)
     particles = [];
     trail = [];
     ballInsideShape = false;
@@ -653,7 +651,7 @@ function ballCircleCollision(b, c) {
 }
 
 function getCurrentBounceSpeed() {
-    return BOUNCE_SPEED + speedBoosts * 1.2;
+    return BOUNCE_SPEED * speedMultiplier;
 }
 
 function clampSpeed() {
@@ -713,19 +711,6 @@ function updatePhysics() {
                 spawnParticles(blk.x, blk.y, '#00BFFF', 12);
                 playSound('blueHit');
 
-                if (consecutiveBlue >= 3) {
-                    consecutiveBlue = 0;
-                    speedBoosts++;
-                    // Immediate speed boost
-                    const boost = 1.25;
-                    ball.vx *= boost;
-                    ball.vy *= boost;
-                    clampSpeed();
-                    spawnParticles(ball.x, ball.y, '#FFD700', 25);
-                    shakeAmount = 14;
-                    playSound('speedBoost');
-                }
-
                 // Check level complete
                 if (blueBlocks.length === 0) {
                     mode = 'levelComplete';
@@ -761,7 +746,6 @@ function updatePhysics() {
             ball.vx = 0;
             ball.vy = 0;
             consecutiveBlue = 0;
-            speedBoosts = 0;
             mode = 'ready';
             playSound('lifeLost');
             return;
@@ -1131,8 +1115,7 @@ function updateUI() {
     document.getElementById('levelName').textContent = `${levelIdx + 1}. ${LEVELS[levelIdx].name}`;
     document.getElementById('scoreValue').textContent = levelScore;
     document.getElementById('livesValue').textContent = '∞';
-    const speedMul = (1 + speedBoosts * 0.15).toFixed(1);
-    document.getElementById('speedValue').textContent = `x${speedMul}`;
+    document.getElementById('speedValue').textContent = `x${speedMultiplier.toFixed(1)}`;
 
     const dotsContainer = document.getElementById('levelDots');
     dotsContainer.innerHTML = '';
@@ -1207,6 +1190,12 @@ function init() {
     canvas.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
     window.addEventListener('keydown', onKeyDown);
 
+    // Speed toggle: 1x / 2x
+    document.getElementById('speedToggle').addEventListener('click', () => {
+        speedMultiplier = speedMultiplier === 1 ? 2 : 1;
+        updateUI();
+    });
+
     document.getElementById('startBtn').addEventListener('click', () => {
         document.getElementById('menuOverlay').classList.add('hidden');
         levelIdx = 0;
@@ -1244,6 +1233,16 @@ function init() {
         if (mode === 'menu') return;
         totalScore -= levelScore;
         initLevel(levelIdx);
+    });
+
+    document.getElementById('resetBallBtn').addEventListener('click', () => {
+        if (mode === 'menu' || mode === 'gameComplete' || mode === 'levelComplete') return;
+        ball.x = paddle.x;
+        ball.y = paddle.y - BALL_R - 2;
+        ball.vx = 0;
+        ball.vy = 0;
+        consecutiveBlue = 0;
+        mode = 'ready';
     });
 
     document.getElementById('skipBtn').addEventListener('click', () => {
