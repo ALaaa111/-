@@ -36,10 +36,9 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background: rgba(5, 5, 16, 0.85);
+            background: rgba(5, 5, 16, 0.88);
             border-radius: 16px;
             z-index: 10;
-            transition: opacity 0.3s;
         }
         .overlay.hidden { display: none; }
         .overlay h1 {
@@ -57,10 +56,11 @@
         }
         .overlay p {
             color: #aaa;
-            font-size: 16px;
+            font-size: 15px;
             margin-bottom: 24px;
             text-align: center;
-            line-height: 1.6;
+            line-height: 1.8;
+            max-width: 360px;
         }
         .overlay .score-text {
             color: #FFD700;
@@ -90,13 +90,6 @@
             box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
         }
         .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(255, 215, 0, 0.6); }
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            margin-top: 12px;
-        }
-        .btn-secondary:hover { background: rgba(255, 255, 255, 0.2); }
         #topBar {
             position: absolute;
             top: 10px; left: 10px; right: 10px;
@@ -109,7 +102,7 @@
         .info-pill {
             background: rgba(0, 0, 0, 0.5);
             border-radius: 20px;
-            padding: 6px 16px;
+            padding: 6px 14px;
             color: #fff;
             font-size: 14px;
             backdrop-filter: blur(8px);
@@ -119,7 +112,8 @@
         .info-pill .value { font-weight: bold; }
         #levelName { color: #FFD700; }
         #scoreValue { color: #00BFFF; }
-        #speedValue { color: #FF6347; }
+        #livesValue { color: #FF4444; }
+        #speedValue { color: #FFD700; }
         #controls {
             position: absolute;
             bottom: 10px; left: 10px; right: 10px;
@@ -161,7 +155,7 @@
             position: absolute;
             bottom: 50px; left: 50%;
             transform: translateX(-50%);
-            color: rgba(255, 255, 255, 0.4);
+            color: rgba(255, 255, 255, 0.5);
             font-size: 13px;
             z-index: 5;
             pointer-events: none;
@@ -180,6 +174,10 @@
             <div class="value" id="levelName">圆形</div>
         </div>
         <div class="info-pill">
+            <div class="label">生命</div>
+            <div class="value" id="livesValue">3</div>
+        </div>
+        <div class="info-pill">
             <div class="label">得分</div>
             <div class="value" id="scoreValue">0</div>
         </div>
@@ -191,7 +189,7 @@
 
     <div id="levelDots"></div>
 
-    <div class="instruction" id="instruction">拖动小球瞄准，松手发射</div>
+    <div class="instruction" id="instruction">移动挡板接球，点击发射</div>
 
     <div id="controls">
         <button class="ctrl-btn" id="restartBtn">重新开始</button>
@@ -200,7 +198,12 @@
 
     <div id="menuOverlay" class="overlay">
         <h1>弹球入洞</h1>
-        <p>经典形状大挑战<br>瞄准通道，让球弹入并击破金色缺口<br>再次进入通道，球入洞内打蓝色得分！</p>
+        <p>经典形状大挑战<br><br>
+        移动绿色挡板接住红球<br>
+        球弹入通道击碎金色方块<br>
+        再次进入通道穿过缺口<br>
+        在形状内部击打蓝色方块得分！<br>
+        连续3次击中蓝色触发加速！</p>
         <button class="btn btn-primary" id="startBtn">开始游戏</button>
     </div>
 
@@ -209,6 +212,12 @@
         <p class="score-text">本关得分: <span id="lcLevelScore">0</span></p>
         <p class="total-score">总分: <span id="lcTotalScore">0</span></p>
         <button class="btn btn-primary" id="nextLevelBtn">下一关</button>
+    </div>
+
+    <div id="gameOverOverlay" class="overlay hidden">
+        <h1 style="color:#FF4444;text-shadow:0 0 20px rgba(255,68,68,0.6);">游戏结束</h1>
+        <p class="score-text">得分: <span id="goScore">0</span></p>
+        <button class="btn btn-primary" id="retryBtn">重试本关</button>
     </div>
 
     <div id="gameCompleteOverlay" class="overlay hidden">
@@ -223,20 +232,23 @@
 // ===================== CONFIG =====================
 const W = 500, H = 750;
 const BALL_R = 8;
-const BASE_SPEED = 4.2;
-const MAX_SPEED = 11;
-const SHAPE_CX = 250, SHAPE_CY = 250;
-const SHAPE_R = 115;
-const CHANNEL_LEN = 175;
-const BALL_START_Y = 665;
-const BLUE_R = 7;
-const BLUE_SPACING = 34;
+const GRAVITY = 0.15;
+const BOUNCE_SPEED = 13.5;
+const MAX_SPEED = 18;
+const PADDLE_W = 80;
+const PADDLE_H = 10;
+const PADDLE_Y = 695;
+const WALL_GAP_Y = 545;
+const CEILING_Y = 20;
+const FAIL_Y = 742;
+const SHAPE_CX = 250, SHAPE_CY = 200, SHAPE_R = 95;
+const BLUE_R = 7, BLUE_SPACING = 30;
 
 const LEVELS = [
-    { name: '圆形',   shape: 'circle',   gap: 88 },
-    { name: '方形',   shape: 'square',   gap: 74 },
-    { name: '三角形', shape: 'triangle', gap: 64 },
-    { name: '五边形', shape: 'pentagon', gap: 55 },
+    { name: '圆形',   shape: 'circle',   gap: 90 },
+    { name: '方形',   shape: 'square',   gap: 76 },
+    { name: '三角形', shape: 'triangle', gap: 66 },
+    { name: '五边形', shape: 'pentagon', gap: 56 },
     { name: '六边形', shape: 'hexagon',  gap: 48 },
     { name: '五角星', shape: 'star',     gap: 42 },
     { name: '心形',   shape: 'heart',    gap: 38 },
@@ -247,28 +259,29 @@ const LEVELS = [
 
 // ===================== STATE =====================
 let canvas, ctx;
-let mode = 'menu'; // menu, aiming, playing, levelComplete, gameComplete
+let mode = 'menu';
 let levelIdx = 0;
 let totalScore = 0;
 let levelScore = 0;
-let ball = { x: 250, y: 680, vx: 0, vy: 0 };
+let lives = 3;
+let ball = { x: 250, y: 680, vx: 0, vy: 0, r: BALL_R };
+let paddle = { x: 250, y: PADDLE_Y, w: PADDLE_W, h: PADDLE_H };
 let walls = [];
 let goldWallSeg = null;
+let goldActive = false;
 let gapA = null, gapB = null;
-let gapState = 'sealed_gold'; // sealed_gold, open, sealed_wall
 let polyVerts = [];
 let blueBlocks = [];
 let consecutiveBlue = 0;
 let speedBoosts = 0;
 let particles = [];
 let trail = [];
-let aimStart = null;
-let aimEnd = null;
-let wasInside = false;
 let shakeAmount = 0;
 let goldPulse = 0;
 let launchFlash = 0;
 let audioCtx = null;
+let ballInsideShape = false;
+let mouseInside = false;
 
 // ===================== SHAPE GENERATION =====================
 function generatePolygon(cx, cy, radius, sides) {
@@ -335,7 +348,7 @@ function getShapeVertices(shape, cx, cy, radius) {
     }
 }
 
-function generateLevel(shape, cx, cy, radius, gapWidth, channelLen) {
+function generateLevel(shape, cx, cy, radius, gapWidth) {
     const verts = getShapeVertices(shape, cx, cy, radius);
     const n = verts.length;
 
@@ -352,115 +365,111 @@ function generateLevel(shape, cx, cy, radius, gapWidth, channelLen) {
     const midX = (e1.x + e2.x) / 2;
     const halfGap = gapWidth / 2;
 
-    // Helper: find point on polygon boundary near target X by walking from start
+    // Find gap points by X-coordinate
     function findPointByX(startIdx, startPt, targetX, walkDir) {
-        // First check if targetX lies on the starting edge
         const edgeMinX = Math.min(e1.x, e2.x), edgeMaxX = Math.max(e1.x, e2.x);
-        if (targetX >= edgeMinX && targetX <= edgeMaxX) {
+        if (targetX >= edgeMinX - 0.001 && targetX <= edgeMaxX + 0.001) {
             const dx = e2.x - e1.x;
             const t = Math.abs(dx) > 0.001 ? (targetX - e1.x) / dx : 0.5;
-            return { pt: { x: targetX, y: e1.y + (e2.y - e1.y) * t }, nextIdx: (beIdx + 1) % n, prevIdx: beIdx };
+            return { pt: { x: targetX, y: e1.y + (e2.y - e1.y) * t }, idx: walkDir > 0 ? (beIdx + 1) % n : beIdx };
         }
-
         let best = { pt: startPt, idx: startIdx, err: Math.abs(startPt.x - targetX) };
         let curr = startIdx;
         let p = startPt;
-
         for (let step = 0; step < n; step++) {
             const nextIdx = walkDir > 0 ? (curr + 1) % n : (curr - 1 + n) % n;
             const np = verts[nextIdx];
             const segMinX = Math.min(p.x, np.x), segMaxX = Math.max(p.x, np.x);
-
             if (targetX >= segMinX - 0.001 && targetX <= segMaxX + 0.001) {
                 const dx = np.x - p.x;
                 const t = Math.abs(dx) > 0.001 ? (targetX - p.x) / dx : 0.5;
-                return { pt: { x: targetX, y: p.y + (np.y - p.y) * t }, nextIdx: walkDir > 0 ? nextIdx : curr, prevIdx: walkDir > 0 ? curr : nextIdx };
+                return { pt: { x: targetX, y: p.y + (np.y - p.y) * t }, idx: nextIdx };
             }
-
             const err = Math.abs(np.x - targetX);
-            if (err < best.err) {
-                best = { pt: { x: np.x, y: np.y }, idx: nextIdx, err };
-            }
+            if (err < best.err) best = { pt: { x: np.x, y: np.y }, idx: nextIdx, err };
             p = np;
             curr = nextIdx;
         }
-        return { pt: best.pt, nextIdx: walkDir > 0 ? (best.idx + 1) % n : best.idx, prevIdx: walkDir > 0 ? best.idx : (best.idx - 1 + n) % n };
+        return { pt: best.pt, idx: best.idx };
     }
 
-    // Find gA by walking left to match target X
     const targetXA = midX - halfGap;
     const resA = findPointByX(beIdx, e1, targetXA, -1);
     const gA = resA.pt;
-    const gAPrevIdx = resA.prevIdx;
+    const gAIdx = resA.idx;
 
-    // Find gB by walking right to match target X
     const targetXB = midX + halfGap;
     const resB = findPointByX((beIdx + 1) % n, e2, targetXB, 1);
     const gB = resB.pt;
-    const gBNextIdx = resB.nextIdx;
+    const gBIdx = resB.idx;
 
-    // Build walls from gB clockwise around the top to gA
+    // Build shape walls: from gB clockwise to gA (skipping the gap)
     const wallSegs = [];
-    wallSegs.push({ x1: gB.x, y1: gB.y, x2: verts[gBNextIdx].x, y2: verts[gBNextIdx].y });
-    let curr = gBNextIdx;
-    while (curr !== gAPrevIdx) {
+    // gB to next vertex
+    wallSegs.push({ x1: gB.x, y1: gB.y, x2: verts[gBIdx].x, y2: verts[gBIdx].y });
+    let curr = gBIdx;
+    let safety = 0;
+    while (curr !== gAIdx && safety < n * 2) {
         const next = (curr + 1) % n;
         wallSegs.push({ x1: verts[curr].x, y1: verts[curr].y, x2: verts[next].x, y2: verts[next].y });
         curr = next;
+        safety++;
     }
-    wallSegs.push({ x1: verts[gAPrevIdx].x, y1: verts[gAPrevIdx].y, x2: gA.x, y2: gA.y });
+    // Last vertex to gA
+    wallSegs.push({ x1: verts[gAIdx].x, y1: verts[gAIdx].y, x2: gA.x, y2: gA.y });
 
-    // Add vertical channel walls going down from gA and gB
-    const channelBottomY = Math.max(gA.y, gB.y) + channelLen;
-    wallSegs.push({ x1: gA.x, y1: gA.y, x2: gA.x, y2: channelBottomY });
-    wallSegs.push({ x1: gB.x, y1: gB.y, x2: gB.x, y2: channelBottomY });
+    // Channel walls (vertical, from gap points down to WALL_GAP_Y)
+    const channelTopY = Math.max(gA.y, gB.y);
+    wallSegs.push({ x1: gA.x, y1: channelTopY, x2: gA.x, y2: WALL_GAP_Y });
+    wallSegs.push({ x1: gB.x, y1: channelTopY, x2: gB.x, y2: WALL_GAP_Y });
 
-    return { walls: wallSegs, gapA: gA, gapB: gB, polygon: verts, channelBottomY };
+    // Wall with gap (horizontal at WALL_GAP_Y)
+    wallSegs.push({ x1: 0, y1: WALL_GAP_Y, x2: gA.x, y2: WALL_GAP_Y });
+    wallSegs.push({ x1: gB.x, y1: WALL_GAP_Y, x2: W, y2: WALL_GAP_Y });
+
+    return { walls: wallSegs, gapA: gA, gapB: gB, polygon: verts, channelTopY };
 }
 
 // ===================== LEVEL INIT =====================
 function initLevel(idx) {
     const lvl = LEVELS[idx];
-    const data = generateLevel(lvl.shape, SHAPE_CX, SHAPE_CY, SHAPE_R, lvl.gap, CHANNEL_LEN);
+    const data = generateLevel(lvl.shape, SHAPE_CX, SHAPE_CY, SHAPE_R, lvl.gap);
 
     walls = data.walls.map(w => ({...w}));
     goldWallSeg = { x1: data.gapA.x, y1: data.gapA.y, x2: data.gapB.x, y2: data.gapB.y };
+    goldActive = true;
     gapA = data.gapA;
     gapB = data.gapB;
-    gapState = 'sealed_gold';
     polyVerts = data.polygon;
 
     // Generate blue blocks inside shape
     blueBlocks = [];
     for (let bx = SHAPE_CX - SHAPE_R; bx <= SHAPE_CX + SHAPE_R; bx += BLUE_SPACING) {
         for (let by = SHAPE_CY - SHAPE_R; by <= SHAPE_CY + SHAPE_R; by += BLUE_SPACING) {
-            const jitter = 0; // could add random offset
-            const px = bx + jitter, py = by + jitter;
-            if (pointInPolygon(px, py, polyVerts)) {
-                // Don't place too close to gap
-                const gapMidX = (gapA.x + gapB.x) / 2;
+            if (pointInPolygon(bx, by, polyVerts)) {
                 const gapMidY = (gapA.y + gapB.y) / 2;
-                const distToGap = Math.sqrt((px - gapMidX)**2 + (py - gapMidY)**2);
-                if (distToGap > 30) {
-                    blueBlocks.push({ x: px, y: py, r: BLUE_R, alive: true, pulse: Math.random() * Math.PI * 2 });
+                const distToGap = Math.abs(by - gapMidY);
+                if (distToGap > 25) {
+                    blueBlocks.push({ x: bx, y: by, r: BLUE_R, alive: true, pulse: Math.random() * Math.PI * 2 });
                 }
             }
         }
     }
 
-    ball.x = 250;
-    ball.y = BALL_START_Y;
+    ball.x = paddle.x;
+    ball.y = paddle.y - BALL_R - 2;
     ball.vx = 0;
     ball.vy = 0;
     consecutiveBlue = 0;
     speedBoosts = 0;
     particles = [];
     trail = [];
-    wasInside = false;
+    ballInsideShape = false;
     shakeAmount = 0;
     launchFlash = 0;
     levelScore = 0;
-    mode = 'aiming';
+    lives = 3;
+    mode = 'ready';
 
     updateUI();
 }
@@ -501,9 +510,8 @@ function ballSegmentCollision(b, seg) {
         if (dot < 0) {
             b.vx -= 2 * dot * nx;
             b.vy -= 2 * dot * ny;
-            // Small random perturbation to avoid infinite loops
-            b.vx += (Math.random() - 0.5) * 0.15;
-            b.vy += (Math.random() - 0.5) * 0.15;
+            b.vx += (Math.random() - 0.5) * 0.2;
+            b.vy += (Math.random() - 0.5) * 0.2;
         }
         return true;
     }
@@ -530,70 +538,55 @@ function ballCircleCollision(b, c) {
     return false;
 }
 
-function getCurrentSpeed() {
-    let s = BASE_SPEED * (1 + speedBoosts * 0.25);
-    return Math.min(s, MAX_SPEED);
+function getCurrentBounceSpeed() {
+    return BOUNCE_SPEED + speedBoosts * 1.2;
 }
 
-function enforceSpeed() {
-    const target = getCurrentSpeed();
+function clampSpeed() {
     const sp = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-    if (sp > 0.01) {
-        ball.vx = (ball.vx / sp) * target;
-        ball.vy = (ball.vy / sp) * target;
+    if (sp > MAX_SPEED) {
+        ball.vx = (ball.vx / sp) * MAX_SPEED;
+        ball.vy = (ball.vy / sp) * MAX_SPEED;
     }
 }
 
 function updatePhysics() {
-    if (mode !== 'playing') return;
+    if (mode !== 'playing' && mode !== 'ready') return;
+    if (mode === 'ready') return;
+
+    // Apply gravity
+    ball.vy += GRAVITY;
+    clampSpeed();
 
     const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-    const steps = Math.max(1, Math.ceil(speed / (BALL_R * 0.6)));
+    const steps = Math.max(1, Math.ceil(speed / (BALL_R * 0.5)));
     const dt = 1 / steps;
 
     for (let s = 0; s < steps; s++) {
         ball.x += ball.vx * dt;
         ball.y += ball.vy * dt;
 
-        // Canvas boundary
+        // Canvas boundaries
         if (ball.x < BALL_R) { ball.x = BALL_R; ball.vx = Math.abs(ball.vx); playSound('wall'); }
         if (ball.x > W - BALL_R) { ball.x = W - BALL_R; ball.vx = -Math.abs(ball.vx); playSound('wall'); }
-        if (ball.y < BALL_R) { ball.y = BALL_R; ball.vy = Math.abs(ball.vy); playSound('wall'); }
-        if (ball.y > H - BALL_R) { ball.y = H - BALL_R; ball.vy = -Math.abs(ball.vy); playSound('wall'); }
+        if (ball.y < CEILING_Y + BALL_R) { ball.y = CEILING_Y + BALL_R; ball.vy = Math.abs(ball.vy); playSound('wall'); }
 
-        // Gold wall collision
-        if (gapState === 'sealed_gold' && goldWallSeg) {
+        // Gold block collision
+        if (goldActive && goldWallSeg) {
             if (ballSegmentCollision(ball, goldWallSeg)) {
-                gapState = 'open';
-                spawnParticles((gapA.x + gapB.x)/2, (gapA.y + gapB.y)/2, '#FFD700', 18);
-                playSound('gapBreak');
-                enforceSpeed();
+                goldActive = false;
+                spawnParticles((gapA.x + gapB.x)/2, (gapA.y + gapB.y)/2, '#FFD700', 20);
+                playSound('goldBreak');
+                consecutiveBlue = 0;
             }
         }
 
-        // Sealed wall collision (after ball entered)
-        if (gapState === 'sealed_wall' && goldWallSeg) {
-            ballSegmentCollision(ball, goldWallSeg);
-        }
-
-        // Shape walls collision
+        // Wall collisions
         for (const w of walls) {
             if (ballSegmentCollision(ball, w)) {
                 playSound('wall');
-                consecutiveBlue = 0; // reset on wall hit
-                enforceSpeed();
+                consecutiveBlue = 0;
             }
-        }
-
-        // Check ball entry
-        if (gapState === 'open') {
-            const inside = pointInPolygon(ball.x, ball.y, polyVerts);
-            if (inside && !wasInside) {
-                gapState = 'sealed_wall';
-                spawnParticles(ball.x, ball.y, '#FFD700', 15);
-                playSound('gapSeal');
-            }
-            wasInside = inside;
         }
 
         // Blue block collisions
@@ -607,33 +600,81 @@ function updatePhysics() {
                 levelScore += pts;
                 totalScore += pts;
                 consecutiveBlue++;
-                spawnParticles(blk.x, blk.y, '#00BFFF', 10);
+                spawnParticles(blk.x, blk.y, '#00BFFF', 12);
                 playSound('blueHit');
-                enforceSpeed();
 
                 if (consecutiveBlue >= 3) {
                     consecutiveBlue = 0;
                     speedBoosts++;
+                    // Immediate speed boost
+                    const boost = 1.25;
+                    ball.vx *= boost;
+                    ball.vy *= boost;
+                    clampSpeed();
                     spawnParticles(ball.x, ball.y, '#FFD700', 25);
-                    shakeAmount = 12;
+                    shakeAmount = 14;
                     playSound('speedBoost');
-                    enforceSpeed();
                 }
 
                 // Check level complete
-                if (blueBlocks.length === 0 && gapState === 'sealed_wall') {
+                if (blueBlocks.length === 0) {
                     mode = 'levelComplete';
-                    setTimeout(showLevelComplete, 600);
+                    setTimeout(showLevelComplete, 500);
                     playSound('levelComplete');
                     return;
                 }
             }
         }
+
+        // Paddle collision
+        if (ball.vy > 0 &&
+            ball.y + ball.r >= paddle.y &&
+            ball.y - ball.r <= paddle.y + paddle.h + 4 &&
+            ball.x >= paddle.x - paddle.w/2 - ball.r &&
+            ball.x <= paddle.x + paddle.w/2 + ball.r) {
+            ball.y = paddle.y - ball.r;
+            const hitPos = (ball.x - paddle.x) / (paddle.w / 2);
+            ball.vy = -getCurrentBounceSpeed();
+            ball.vx = hitPos * 4.5;
+            launchFlash = 0.8;
+            playSound('paddle');
+        }
+
+        // Check fail
+        if (ball.y > FAIL_Y) {
+            lives--;
+            if (lives <= 0) {
+                mode = 'gameOver';
+                showGameOver();
+                playSound('gameOver');
+                return;
+            } else {
+                ball.x = paddle.x;
+                ball.y = paddle.y - BALL_R - 2;
+                ball.vx = 0;
+                ball.vy = 0;
+                consecutiveBlue = 0;
+                mode = 'ready';
+                playSound('lifeLost');
+            }
+            return;
+        }
+    }
+
+    // Track shape entry/exit
+    if (goldActive) {
+        ballInsideShape = false;
+    } else {
+        const inside = pointInPolygon(ball.x, ball.y, polyVerts);
+        if (!inside && ballInsideShape) {
+            consecutiveBlue = 0;
+        }
+        ballInsideShape = inside;
     }
 
     // Trail
     trail.push({ x: ball.x, y: ball.y });
-    if (trail.length > 12) trail.shift();
+    if (trail.length > 14) trail.shift();
 
     // Shake decay
     if (shakeAmount > 0) shakeAmount *= 0.85;
@@ -644,7 +685,7 @@ function updatePhysics() {
 function spawnParticles(x, y, color, count) {
     for (let i = 0; i < count; i++) {
         const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
-        const speed = 1 + Math.random() * 3;
+        const speed = 1 + Math.random() * 3.5;
         particles.push({
             x, y,
             vx: Math.cos(angle) * speed,
@@ -672,7 +713,6 @@ function updateParticles() {
 function render() {
     ctx.save();
 
-    // Screen shake
     if (shakeAmount > 0.5) {
         ctx.translate((Math.random()-0.5) * shakeAmount, (Math.random()-0.5) * shakeAmount);
     }
@@ -684,7 +724,7 @@ function render() {
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Subtle grid
+    // Grid
     ctx.strokeStyle = 'rgba(255,255,255,0.03)';
     ctx.lineWidth = 1;
     for (let x = 0; x < W; x += 40) {
@@ -694,17 +734,26 @@ function render() {
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
     }
 
-    goldPulse += 0.05;
+    goldPulse += 0.06;
 
-    // Draw shape walls
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Glow walls
-    ctx.shadowColor = 'rgba(255,255,255,0.4)';
-    ctx.shadowBlur = 8;
-    ctx.strokeStyle = '#e0e0e0';
-    ctx.lineWidth = 4;
+    // Draw walls (black with subtle glow)
+    ctx.shadowColor = 'rgba(100,100,120,0.4)';
+    ctx.shadowBlur = 6;
+    ctx.strokeStyle = '#2a2a3e';
+    ctx.lineWidth = 5;
+    for (const w of walls) {
+        ctx.beginPath();
+        ctx.moveTo(w.x1, w.y1);
+        ctx.lineTo(w.x2, w.y2);
+        ctx.stroke();
+    }
+    // Inner highlight
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#444460';
+    ctx.lineWidth = 2;
     for (const w of walls) {
         ctx.beginPath();
         ctx.moveTo(w.x1, w.y1);
@@ -712,45 +761,33 @@ function render() {
         ctx.stroke();
     }
 
-    // Draw gap
-    if (gapState === 'sealed_gold' && goldWallSeg) {
+    // Draw gold block
+    if (goldActive && goldWallSeg) {
         const pulse = 0.5 + Math.sin(goldPulse) * 0.3;
         ctx.shadowColor = '#FFD700';
         ctx.shadowBlur = 15 + pulse * 10;
-        ctx.strokeStyle = `rgba(255, 215, 0, ${0.8 + pulse * 0.2})`;
-        ctx.lineWidth = 5;
+        ctx.strokeStyle = `rgba(255, 215, 0, ${0.85 + pulse * 0.15})`;
+        ctx.lineWidth = 6;
         ctx.beginPath();
         ctx.moveTo(goldWallSeg.x1, goldWallSeg.y1);
         ctx.lineTo(goldWallSeg.x2, goldWallSeg.y2);
         ctx.stroke();
 
-        // Gap indicators (arrows pointing up toward gap from channel)
+        // Arrow indicator
         const gapMidX = (goldWallSeg.x1 + goldWallSeg.x2) / 2;
         const gapMidY = (goldWallSeg.y1 + goldWallSeg.y2) / 2;
         ctx.shadowBlur = 0;
         ctx.fillStyle = `rgba(255, 215, 0, ${0.3 + pulse * 0.3})`;
-        ctx.font = '18px sans-serif';
+        ctx.font = '16px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('▲', gapMidX, gapMidY + 28);
-    } else if (gapState === 'sealed_wall' && goldWallSeg) {
-        ctx.shadowColor = 'rgba(255,100,100,0.3)';
-        ctx.shadowBlur = 5;
-        ctx.strokeStyle = 'rgba(200, 200, 200, 0.6)';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.moveTo(goldWallSeg.x1, goldWallSeg.y1);
-        ctx.lineTo(goldWallSeg.x2, goldWallSeg.y2);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        ctx.fillText('▼', gapMidX, gapMidY - 12);
     }
-
     ctx.shadowBlur = 0;
 
     // Draw blue blocks
     for (const blk of blueBlocks) {
         if (!blk.alive) continue;
-        blk.pulse += 0.03;
+        blk.pulse += 0.04;
         const pulse = 0.7 + Math.sin(blk.pulse) * 0.3;
         ctx.shadowColor = '#00BFFF';
         ctx.shadowBlur = 8 + pulse * 4;
@@ -768,21 +805,21 @@ function render() {
     // Draw trail
     for (let i = 0; i < trail.length; i++) {
         const alpha = (i / trail.length) * 0.4;
-        const r = BALL_R * (i / trail.length) * 0.8;
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        const r = BALL_R * (i / trail.length) * 0.7;
+        ctx.fillStyle = `rgba(255, 80, 80, ${alpha})`;
         ctx.beginPath();
         ctx.arc(trail[i].x, trail[i].y, r, 0, Math.PI * 2);
         ctx.fill();
     }
 
-    // Draw ball
-    if (mode === 'playing' || mode === 'aiming') {
-        ctx.shadowColor = '#fff';
+    // Draw ball (red)
+    if (mode === 'playing' || mode === 'ready') {
+        ctx.shadowColor = '#FF4444';
         ctx.shadowBlur = 12 + launchFlash * 20;
         const ballGrad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 0, ball.x, ball.y, BALL_R);
-        ballGrad.addColorStop(0, '#ffffff');
-        ballGrad.addColorStop(0.7, '#e0e0ff');
-        ballGrad.addColorStop(1, '#aaaacc');
+        ballGrad.addColorStop(0, '#FF8888');
+        ballGrad.addColorStop(0.7, '#FF3333');
+        ballGrad.addColorStop(1, '#CC0000');
         ctx.fillStyle = ballGrad;
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
@@ -790,42 +827,18 @@ function render() {
         ctx.shadowBlur = 0;
     }
 
-    // Draw aim line
-    if (mode === 'aiming' && aimStart && aimEnd) {
-        const dx = aimStart.x - aimEnd.x;
-        const dy = aimStart.y - aimEnd.y;
-        const len = Math.sqrt(dx*dx + dy*dy);
-        const power = Math.min(len / 150, 1);
-
-        // Dashed aim line
-        ctx.strokeStyle = `rgba(255, 215, 0, ${0.4 + power * 0.4})`;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([8, 6]);
-        ctx.beginPath();
-        ctx.moveTo(ball.x, ball.y);
-        ctx.lineTo(ball.x + dx * 0.8, ball.y + dy * 0.8);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Power circle
-        ctx.strokeStyle = `rgba(255, 215, 0, ${0.3 + power * 0.5})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, BALL_R + 4 + power * 8, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Direction arrow
-        const arrowX = ball.x + dx * 0.8;
-        const arrowY = ball.y + dy * 0.8;
-        const angle = Math.atan2(dy, dx);
-        ctx.fillStyle = `rgba(255, 215, 0, ${0.6 + power * 0.4})`;
-        ctx.beginPath();
-        ctx.moveTo(arrowX, arrowY);
-        ctx.lineTo(arrowX - Math.cos(angle - 0.4) * 10, arrowY - Math.sin(angle - 0.4) * 10);
-        ctx.lineTo(arrowX - Math.cos(angle + 0.4) * 10, arrowY - Math.sin(angle + 0.4) * 10);
-        ctx.closePath();
-        ctx.fill();
-    }
+    // Draw paddle (green)
+    ctx.shadowColor = '#00FF66';
+    ctx.shadowBlur = 12;
+    const padGrad = ctx.createLinearGradient(paddle.x - paddle.w/2, paddle.y, paddle.x + paddle.w/2, paddle.y);
+    padGrad.addColorStop(0, '#00CC44');
+    padGrad.addColorStop(0.5, '#00FF66');
+    padGrad.addColorStop(1, '#00CC44');
+    ctx.fillStyle = padGrad;
+    ctx.beginPath();
+    ctx.roundRect(paddle.x - paddle.w/2, paddle.y, paddle.w, paddle.h, 5);
+    ctx.fill();
+    ctx.shadowBlur = 0;
 
     // Draw particles
     for (const p of particles) {
@@ -840,6 +853,15 @@ function render() {
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
 
+    // Draw consecutive blue indicator
+    if (consecutiveBlue > 0 && mode === 'playing') {
+        ctx.fillStyle = `rgba(0, 191, 255, ${0.5 + consecutiveBlue * 0.15})`;
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        const text = '连击 ' + consecutiveBlue + '/3';
+        ctx.fillText(text, W/2, H - 65);
+    }
+
     ctx.restore();
 }
 
@@ -847,10 +869,8 @@ function render() {
 function getCanvasPos(e) {
     const rect = canvas.getBoundingClientRect();
     const sx = canvas.width / rect.width;
-    const sy = canvas.height / rect.height;
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: (cx - rect.left) * sx, y: (cy - rect.top) * sy };
+    return { x: (cx - rect.left) * sx };
 }
 
 function onPointerDown(e) {
@@ -858,38 +878,47 @@ function onPointerDown(e) {
     if (audioCtx === null) {
         try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(ex) {}
     }
-    if (mode !== 'aiming') return;
     const pos = getCanvasPos(e);
-    const dist = Math.sqrt((pos.x - ball.x)**2 + (pos.y - ball.y)**2);
-    if (dist < 60) {
-        aimStart = { x: ball.x, y: ball.y };
-        aimEnd = pos;
+    paddle.x = Math.max(paddle.w/2, Math.min(W - paddle.w/2, pos.x));
+
+    if (mode === 'ready') {
+        ball.x = paddle.x;
+        ball.vy = -getCurrentBounceSpeed();
+        ball.vx = 0;
+        mode = 'playing';
+        launchFlash = 1;
+        playSound('launch');
     }
 }
 
 function onPointerMove(e) {
     e.preventDefault();
-    if (mode !== 'aiming' || !aimStart) return;
-    aimEnd = getCanvasPos(e);
+    if (mode === 'menu' || mode === 'levelComplete' || mode === 'gameOver' || mode === 'gameComplete') return;
+    const pos = getCanvasPos(e);
+    paddle.x = Math.max(paddle.w/2, Math.min(W - paddle.w/2, pos.x));
+    if (mode === 'ready') {
+        ball.x = paddle.x;
+    }
 }
 
-function onPointerUp(e) {
-    e.preventDefault();
-    if (mode !== 'aiming' || !aimStart || !aimEnd) return;
-    const dx = aimStart.x - aimEnd.x;
-    const dy = aimStart.y - aimEnd.y;
-    const len = Math.sqrt(dx*dx + dy*dy);
-    if (len > 10) {
-        const power = Math.min(len / 150, 1);
-        const speed = BASE_SPEED * (0.5 + power * 0.5);
-        ball.vx = (dx / len) * speed;
-        ball.vy = (dy / len) * speed;
-        mode = 'playing';
-        launchFlash = 1;
-        playSound('launch');
+function onKeyDown(e) {
+    if (e.key === ' ' || e.key === 'Enter') {
+        if (mode === 'ready') {
+            ball.vy = -getCurrentBounceSpeed();
+            ball.vx = 0;
+            mode = 'playing';
+            launchFlash = 1;
+            playSound('launch');
+        }
     }
-    aimStart = null;
-    aimEnd = null;
+    if (e.key === 'ArrowLeft') {
+        paddle.x = Math.max(paddle.w/2, paddle.x - 20);
+        if (mode === 'ready') ball.x = paddle.x;
+    }
+    if (e.key === 'ArrowRight') {
+        paddle.x = Math.min(W - paddle.w/2, paddle.x + 20);
+        if (mode === 'ready') ball.x = paddle.x;
+    }
 }
 
 // ===================== AUDIO =====================
@@ -905,50 +934,58 @@ function playSound(type) {
         switch (type) {
             case 'wall':
                 osc.type = 'square';
-                osc.frequency.value = 180;
-                gain.gain.setValueAtTime(0.04, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-                osc.start(now); osc.stop(now + 0.08);
+                osc.frequency.value = 150;
+                gain.gain.setValueAtTime(0.03, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+                osc.start(now); osc.stop(now + 0.06);
+                break;
+            case 'paddle':
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(500, now + 0.08);
+                gain.gain.setValueAtTime(0.06, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
                 break;
             case 'blueHit':
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(600, now);
-                osc.frequency.exponentialRampToValueAtTime(900, now + 0.1);
-                gain.gain.setValueAtTime(0.08, now);
+                osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+                gain.gain.setValueAtTime(0.07, now);
                 gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
                 osc.start(now); osc.stop(now + 0.15);
                 break;
-            case 'gapBreak':
+            case 'goldBreak':
                 osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(300, now);
-                osc.frequency.exponentialRampToValueAtTime(100, now + 0.2);
-                gain.gain.setValueAtTime(0.12, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-                osc.start(now); osc.stop(now + 0.25);
-                break;
-            case 'gapSeal':
-                osc.type = 'sine';
                 osc.frequency.setValueAtTime(400, now);
-                osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.25);
                 gain.gain.setValueAtTime(0.1, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-                osc.start(now); osc.stop(now + 0.2);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
                 break;
             case 'speedBoost':
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(500, now);
-                osc.frequency.exponentialRampToValueAtTime(1500, now + 0.3);
-                gain.gain.setValueAtTime(0.12, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-                osc.start(now); osc.stop(now + 0.35);
+                osc.frequency.exponentialRampToValueAtTime(1800, now + 0.35);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+                osc.start(now); osc.stop(now + 0.4);
                 break;
             case 'launch':
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(200, now);
-                osc.frequency.exponentialRampToValueAtTime(500, now + 0.1);
-                gain.gain.setValueAtTime(0.08, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+                gain.gain.setValueAtTime(0.07, now);
                 gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
                 osc.start(now); osc.stop(now + 0.12);
+                break;
+            case 'lifeLost':
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                osc.start(now); osc.stop(now + 0.35);
                 break;
             case 'levelComplete':
                 [523, 659, 784, 1047].forEach((freq, i) => {
@@ -964,6 +1001,20 @@ function playSound(type) {
                     o.stop(now + i * 0.1 + 0.3);
                 });
                 break;
+            case 'gameOver':
+                [400, 350, 300, 200].forEach((freq, i) => {
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.connect(g); g.connect(audioCtx.destination);
+                    o.type = 'sawtooth';
+                    o.frequency.value = freq;
+                    g.gain.setValueAtTime(0, now + i * 0.15);
+                    g.gain.linearRampToValueAtTime(0.08, now + i * 0.15 + 0.02);
+                    g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.3);
+                    o.start(now + i * 0.15);
+                    o.stop(now + i * 0.15 + 0.3);
+                });
+                break;
         }
     } catch(ex) {}
 }
@@ -972,10 +1023,10 @@ function playSound(type) {
 function updateUI() {
     document.getElementById('levelName').textContent = `${levelIdx + 1}. ${LEVELS[levelIdx].name}`;
     document.getElementById('scoreValue').textContent = totalScore;
-    const speedMul = (1 + speedBoosts * 0.25).toFixed(1);
+    document.getElementById('livesValue').textContent = '♥'.repeat(lives) || '0';
+    const speedMul = (1 + speedBoosts * 0.15).toFixed(1);
     document.getElementById('speedValue').textContent = `x${speedMul}`;
 
-    // Level dots
     const dotsContainer = document.getElementById('levelDots');
     dotsContainer.innerHTML = '';
     for (let i = 0; i < LEVELS.length; i++) {
@@ -986,19 +1037,15 @@ function updateUI() {
         dotsContainer.appendChild(dot);
     }
 
-    // Instruction
     const inst = document.getElementById('instruction');
-    if (mode === 'aiming') {
-        inst.textContent = '拖动小球瞄准，松手发射';
+    if (mode === 'ready') {
+        inst.textContent = '移动挡板，点击/空格发射小球';
         inst.style.display = '';
-    } else if (mode === 'playing' && gapState === 'sealed_gold') {
-        inst.textContent = '瞄准通道，让球弹入并打到金色缺口！';
+    } else if (mode === 'playing' && goldActive) {
+        inst.textContent = '球弹入通道，击碎金色方块！';
         inst.style.display = '';
-    } else if (mode === 'playing' && gapState === 'open') {
-        inst.textContent = '缺口已打开！再次让球进入通道打入缺口';
-        inst.style.display = '';
-    } else if (mode === 'playing' && gapState === 'sealed_wall') {
-        inst.textContent = '连续击中蓝色方块加速得分！';
+    } else if (mode === 'playing' && !goldActive) {
+        inst.textContent = '缺口已开！再次弹入通道进入形状内部';
         inst.style.display = '';
     } else {
         inst.style.display = 'none';
@@ -1009,6 +1056,11 @@ function showLevelComplete() {
     document.getElementById('lcLevelScore').textContent = levelScore;
     document.getElementById('lcTotalScore').textContent = totalScore;
     document.getElementById('levelCompleteOverlay').classList.remove('hidden');
+}
+
+function showGameOver() {
+    document.getElementById('goScore').textContent = totalScore;
+    document.getElementById('gameOverOverlay').classList.remove('hidden');
 }
 
 function showGameComplete() {
@@ -1030,15 +1082,14 @@ function init() {
     canvas = document.getElementById('gameCanvas');
     ctx = canvas.getContext('2d');
 
-    // Input
     canvas.addEventListener('mousedown', onPointerDown);
     canvas.addEventListener('mousemove', onPointerMove);
-    canvas.addEventListener('mouseup', onPointerUp);
+    canvas.addEventListener('mouseup', (e) => e.preventDefault());
     canvas.addEventListener('touchstart', onPointerDown, { passive: false });
     canvas.addEventListener('touchmove', onPointerMove, { passive: false });
-    canvas.addEventListener('touchend', onPointerUp, { passive: false });
+    canvas.addEventListener('touchend', (e) => e.preventDefault(), { passive: false });
+    window.addEventListener('keydown', onKeyDown);
 
-    // Buttons
     document.getElementById('startBtn').addEventListener('click', () => {
         document.getElementById('menuOverlay').classList.add('hidden');
         levelIdx = 0;
@@ -1057,6 +1108,12 @@ function init() {
         }
     });
 
+    document.getElementById('retryBtn').addEventListener('click', () => {
+        document.getElementById('gameOverOverlay').classList.add('hidden');
+        totalScore -= levelScore;
+        initLevel(levelIdx);
+    });
+
     document.getElementById('restartGameBtn').addEventListener('click', () => {
         document.getElementById('gameCompleteOverlay').classList.add('hidden');
         levelIdx = 0;
@@ -1065,12 +1122,15 @@ function init() {
     });
 
     document.getElementById('restartBtn').addEventListener('click', () => {
+        if (mode === 'menu') return;
         totalScore -= levelScore;
         initLevel(levelIdx);
     });
 
     document.getElementById('skipBtn').addEventListener('click', () => {
-        if (mode === 'gameComplete') return;
+        if (mode === 'menu' || mode === 'gameComplete') return;
+        document.getElementById('levelCompleteOverlay').classList.add('hidden');
+        document.getElementById('gameOverOverlay').classList.add('hidden');
         levelIdx++;
         if (levelIdx >= LEVELS.length) {
             mode = 'gameComplete';
