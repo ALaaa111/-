@@ -245,16 +245,16 @@ const SHAPE_CX = 250, SHAPE_CY = 200, SHAPE_R = 95;
 const BLUE_R = 7, BLUE_SPACING = 30;
 
 const LEVELS = [
-    { name: '圆形',   shape: 'circle',   gap: 36, channel: 80 },
-    { name: '方形',   shape: 'square',   gap: 34, channel: 66 },
-    { name: '三角形', shape: 'triangle', gap: 32, channel: 54 },
-    { name: '五边形', shape: 'pentagon', gap: 32, channel: 44 },
-    { name: '六边形', shape: 'hexagon',  gap: 30, channel: 38 },
-    { name: '五角星', shape: 'star',     gap: 30, channel: 32 },
-    { name: '心形',   shape: 'heart',    gap: 28, channel: 28 },
-    { name: '菱形',   shape: 'diamond',  gap: 28, channel: 24 },
-    { name: '八角形', shape: 'octagon',  gap: 28, channel: 22 },
-    { name: '十字形', shape: 'cross',    gap: 28, channel: 20 },
+    { name: '圆形',   shape: 'circle',   channel: 80 },
+    { name: '方形',   shape: 'square',   channel: 66 },
+    { name: '三角形', shape: 'triangle', channel: 54 },
+    { name: '五边形', shape: 'pentagon', channel: 44 },
+    { name: '六边形', shape: 'hexagon',  channel: 38 },
+    { name: '五角星', shape: 'star',     channel: 32 },
+    { name: '心形',   shape: 'heart',    channel: 28 },
+    { name: '菱形',   shape: 'diamond',  channel: 24 },
+    { name: '八角形', shape: 'octagon',  channel: 22 },
+    { name: '十字形', shape: 'cross',    channel: 20 },
 ];
 
 // ===================== STATE =====================
@@ -348,7 +348,7 @@ function getShapeVertices(shape, cx, cy, radius) {
     }
 }
 
-function generateLevel(shape, cx, cy, radius, gapWidth, channelWidth) {
+function generateLevel(shape, cx, cy, radius, channelWidth) {
     const verts = getShapeVertices(shape, cx, cy, radius);
     const n = verts.length;
 
@@ -363,9 +363,13 @@ function generateLevel(shape, cx, cy, radius, gapWidth, channelWidth) {
     const e1 = verts[beIdx];
     const e2 = verts[(beIdx+1)%n];
     const midX = (e1.x + e2.x) / 2;
-    const halfGap = gapWidth / 2;
+    const halfCh = channelWidth / 2;
 
-    // Find gap points by X-coordinate
+    // Gap = channel width, centered on shape's bottom edge midpoint
+    const gapLeftX = midX - halfCh;
+    const gapRightX = midX + halfCh;
+
+    // Find gap points on shape boundary by X-coordinate
     function findPointByX(startIdx, startPt, targetX, walkDir) {
         const edgeMinX = Math.min(e1.x, e2.x), edgeMaxX = Math.max(e1.x, e2.x);
         if (targetX >= edgeMinX - 0.001 && targetX <= edgeMaxX + 0.001) {
@@ -393,19 +397,16 @@ function generateLevel(shape, cx, cy, radius, gapWidth, channelWidth) {
         return { pt: best.pt, idx: best.idx };
     }
 
-    const targetXA = midX - halfGap;
-    const resA = findPointByX(beIdx, e1, targetXA, -1);
+    const resA = findPointByX(beIdx, e1, gapLeftX, -1);
     const gA = resA.pt;
     const gAIdx = resA.idx;
 
-    const targetXB = midX + halfGap;
-    const resB = findPointByX((beIdx + 1) % n, e2, targetXB, 1);
+    const resB = findPointByX((beIdx + 1) % n, e2, gapRightX, 1);
     const gB = resB.pt;
     const gBIdx = resB.idx;
 
-    // Build shape walls: from gB clockwise to gA (skipping the gap)
+    // Build shape walls: from gB clockwise around to gA (skipping the gap)
     const wallSegs = [];
-    // gB to next vertex
     wallSegs.push({ x1: gB.x, y1: gB.y, x2: verts[gBIdx].x, y2: verts[gBIdx].y });
     let curr = gBIdx;
     let safety = 0;
@@ -415,28 +416,28 @@ function generateLevel(shape, cx, cy, radius, gapWidth, channelWidth) {
         curr = next;
         safety++;
     }
-    // Last vertex to gA
     wallSegs.push({ x1: verts[gAIdx].x, y1: verts[gAIdx].y, x2: gA.x, y2: gA.y });
 
-    // Channel walls (angled, from gap points narrowing to channelWidth at WALL_GAP_Y)
+    // Rectangular channel: vertical walls from gap points straight down to WALL_GAP_Y
     const channelTopY = Math.max(gA.y, gB.y);
-    const halfCh = channelWidth / 2;
-    const chBotA = { x: midX - halfCh, y: WALL_GAP_Y };
-    const chBotB = { x: midX + halfCh, y: WALL_GAP_Y };
-    wallSegs.push({ x1: gA.x, y1: channelTopY, x2: chBotA.x, y2: chBotA.y });
-    wallSegs.push({ x1: gB.x, y1: channelTopY, x2: chBotB.x, y2: chBotB.y });
+    wallSegs.push({ x1: gapLeftX, y1: channelTopY, x2: gapLeftX, y2: WALL_GAP_Y });
+    wallSegs.push({ x1: gapRightX, y1: channelTopY, x2: gapRightX, y2: WALL_GAP_Y });
 
-    // Wall with gap (horizontal at WALL_GAP_Y, using channel width)
-    wallSegs.push({ x1: 0, y1: WALL_GAP_Y, x2: chBotA.x, y2: WALL_GAP_Y });
-    wallSegs.push({ x1: chBotB.x, y1: WALL_GAP_Y, x2: W, y2: WALL_GAP_Y });
+    // Bottom wall with gap matching channel width
+    wallSegs.push({ x1: 0, y1: WALL_GAP_Y, x2: gapLeftX, y2: WALL_GAP_Y });
+    wallSegs.push({ x1: gapRightX, y1: WALL_GAP_Y, x2: W, y2: WALL_GAP_Y });
 
-    return { walls: wallSegs, gapA: gA, gapB: gB, polygon: verts, channelTopY, chBotA, chBotB };
+    // Use gap points aligned to channel width for gold block
+    const goldA = { x: gapLeftX, y: channelTopY };
+    const goldB = { x: gapRightX, y: channelTopY };
+
+    return { walls: wallSegs, gapA: goldA, gapB: goldB, polygon: verts, channelTopY, chBotA: { x: gapLeftX, y: WALL_GAP_Y }, chBotB: { x: gapRightX, y: WALL_GAP_Y } };
 }
 
 // ===================== LEVEL INIT =====================
 function initLevel(idx) {
     const lvl = LEVELS[idx];
-    const data = generateLevel(lvl.shape, SHAPE_CX, SHAPE_CY, SHAPE_R, lvl.gap, lvl.channel);
+    const data = generateLevel(lvl.shape, SHAPE_CX, SHAPE_CY, SHAPE_R, lvl.channel);
 
     walls = data.walls.map(w => ({...w}));
     goldWallSeg = { x1: data.gapA.x, y1: data.gapA.y, x2: data.gapB.x, y2: data.gapB.y };
