@@ -445,22 +445,17 @@ function initLevel(idx) {
     gapB = data.gapB;
     polyVerts = data.polygon;
 
-    // Generate blue blocks on both sides of the channel (above WALL_GAP_Y, outside shape)
+    // Generate blue blocks INSIDE the shape (the empty area ball enters after breaking gold)
     blueBlocks = [];
-    const midX = (gapA.x + gapB.x) / 2;
-    const chTopY = data.channelTopY;
-    const chBotA = data.chBotA, chBotB = data.chBotB;
-    for (let bx = 25; bx <= W - 25; bx += BLUE_SPACING) {
-        for (let by = chTopY + 15; by < WALL_GAP_Y - 8; by += BLUE_SPACING) {
-            // Interpolate channel wall X positions at this Y
-            const t = (by - chTopY) / (WALL_GAP_Y - chTopY);
-            const leftWallX = gapA.x + (chBotA.x - gapA.x) * t;
-            const rightWallX = gapB.x + (chBotB.x - gapB.x) * t;
-            // Skip if inside channel passage
-            if (bx > leftWallX - 12 && bx < rightWallX + 12) continue;
-            // Skip if inside the shape
-            if (pointInPolygon(bx, by, polyVerts)) continue;
-            blueBlocks.push({ x: bx, y: by, r: BLUE_R, alive: true, pulse: Math.random() * Math.PI * 2 });
+    const gapMidY = (gapA.y + gapB.y) / 2;
+    for (let bx = SHAPE_CX - SHAPE_R; bx <= SHAPE_CX + SHAPE_R; bx += BLUE_SPACING) {
+        for (let by = SHAPE_CY - SHAPE_R; by <= SHAPE_CY + SHAPE_R; by += BLUE_SPACING) {
+            if (pointInPolygon(bx, by, polyVerts)) {
+                // Don't place too close to the gap entrance
+                if (Math.abs(by - gapMidY) > 25) {
+                    blueBlocks.push({ x: bx, y: by, r: BLUE_R, alive: true, pulse: Math.random() * Math.PI * 2 });
+                }
+            }
         }
     }
 
@@ -1050,10 +1045,10 @@ function updateUI() {
         inst.textContent = '移动挡板，点击/空格发射小球';
         inst.style.display = '';
     } else if (mode === 'playing' && goldActive) {
-        inst.textContent = '击打蓝色方块得分！球弹入通道击碎金色方块';
+        inst.textContent = '球弹入通道，击碎金色方块！';
         inst.style.display = '';
     } else if (mode === 'playing' && !goldActive) {
-        inst.textContent = '金色已破！继续击打蓝色方块得分';
+        inst.textContent = '缺口已开！再次进入通道打蓝色方块得分';
         inst.style.display = '';
     } else {
         inst.style.display = 'none';
